@@ -1,0 +1,32 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""The setup script."""
+
+from setuptools import setup
+
+with open('README.md') as readme_file:
+    readme = readme_file.read()
+
+
+with open('requirements.txt') as requirements_file:
+    requirements = requirements_file.read().splitlines()
+
+
+setup(name='midatasets',
+      version='0.1',
+      description='Medical Image Dataset tools',
+      author='F. K.',
+      keywords='medical ',
+      license='Apache License 2.0',
+      long_description=readme,
+      classifiers=['Intended Audience :: Developers',
+                   'Intended Audience :: Education',
+                   'Intended Audience :: Science/Research',
+                   'License :: OSI Approved :: Apache Software License',
+                   'Operating System :: POSIX :: Linux',
+                   'Operating System :: MacOS :: MacOS X',
+                   'Operating System :: Microsoft :: Windows',
+                   'Programming Language :: Python :: 3.4'],
+      install_requires=requirements
+      )
