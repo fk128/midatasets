@@ -3,6 +3,7 @@ import os
 import SimpleITK as sitk
 import numpy as np
 import pydicom as dicom
+import pandas as pd
 from skimage.draw import polygon
 
 
@@ -99,3 +100,85 @@ def read_tag_file(filename, img_size=(512, 512)):
     imw = img_size[1]
     img = v[-imh * imw:].reshape(imh, imw)
     return img
+
+
+def export_train_test_split(reader, out_dir='.', type='csv', ratio=0.66, seed=42, cv=False, n_splits=3):
+    name = reader.name
+
+    if type == 'csv':
+        train_x, train_y, test_x, test_y, names_x, names_y = \
+            reader.get_train_test_split_labelled_images_list(ratio, is_paths=True, seed=seed)
+
+        df = pd.DataFrame()
+        df['image'] = train_x
+        df['labelmap'] = train_y
+        df['name'] = names_x
+        df.set_index('name', inplace=True)
+        df.to_csv(os.path.join(out_dir, name + '_train_image_labelmap_list.csv'))
+
+        df = pd.DataFrame()
+        df['image'] = test_x
+        df['labelmap'] = test_y
+        df['name'] = names_y
+        df.set_index('name', inplace=True)
+        df.to_csv(os.path.join(out_dir, name + '_test_image_labelmap_list.csv'))
+
+    elif type == 'txt':
+        if cv:
+            from sklearn.model_selection import KFold
+            kf = KFold(n_splits=n_splits)
+            for i, (train_idx, test_idx) in enumerate(kf.split(reader.image_list)):
+                train_x = np.array(reader.image_list)[train_idx]
+                train_y = np.array(reader.labelmap_list)[train_idx]
+                test_x = np.array(reader.image_list)[test_idx]
+                test_y = np.array(reader.labelmap_list)[test_idx]
+                with open(
+                        os.path.join(out_dir, name + '_train_imagelist_f' + str(i + 1) + 'of' + str(n_splits) + '.txt'),
+                        'w+') as file:
+                    for img_path in train_x:
+                        file.write(img_path + '\n')
+
+                with open(
+                        os.path.join(out_dir, name + '_train_labellist_f' + str(i + 1) + 'of' + str(n_splits) + '.txt'),
+                        'w+') as file:
+                    for img_path in train_y:
+                        file.write(img_path + '\n')
+
+                with open(
+                        os.path.join(out_dir, name + '_test_imagelist_f' + str(i + 1) + 'of' + str(n_splits) + '.txt'),
+                        'w+') as file:
+                    for img_path in test_x:
+                        file.write(img_path + '\n')
+
+                with open(
+                        os.path.join(out_dir, name + '_test_labellist_f' + str(i + 1) + 'of' + str(n_splits) + '.txt'),
+                        'w+') as file:
+                    for img_path in test_y:
+                        file.write(img_path + '\n')
+
+        else:
+            train_x, train_y, test_x, test_y, names_x, names_y = \
+                reader.get_train_test_split_labelled_images_list(ratio, is_paths=True, seed=seed)
+            with open(os.path.join(out_dir, name + '_train_imagelist.txt'), 'w+') as file:
+                for img_path in train_x:
+                    file.write(img_path + '\n')
+
+            with open(os.path.join(out_dir, name + '_train_labellist.txt'), 'w+') as file:
+                for img_path in train_y:
+                    file.write(img_path + '\n')
+
+            with open(os.path.join(out_dir, name + '_test_imagelist.txt'), 'w+') as file:
+                for img_path in test_x:
+                    file.write(img_path + '\n')
+
+            with open(os.path.join(out_dir, name + '_test_labellist.txt'), 'w+') as file:
+                for img_path in test_y:
+                    file.write(img_path + '\n')
+
+    elif type == 'csv_all':
+        df = pd.DataFrame()
+        df['image'] = reader.image_list
+        df['labelmap'] = reader.labelmap_list
+        df['name'] = reader.get_image_names()
+        df.set_index('name', inplace=True)
+        df.to_csv(os.path.join(out_dir, name + '_image_labelmap_list.csv'))

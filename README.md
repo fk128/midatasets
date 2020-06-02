@@ -1,7 +1,7 @@
 # MIDatasets #
 
 
-python library to interact with nifti medical image datasets available locally on disc.
+python library to interact with a local nifti medical image datasets.
 
 ### Setup
 
@@ -69,18 +69,29 @@ images should go in the corresponding folders, e.g.
 
 ### Adding datasets
 
-New datasets are loaded via entry points as plugins. An example of how to
-define and add additional datasets can be found in `example_dataset`.
+To add a new dataset, simply create a yaml in your home directory `~/.midatasets.yaml` file and add a new dataset entry
 
-Running `cd example_dataset && pip install -e .`  would make `LiverReader` and `LungReader`
-available as imports from `midatasets.datasets`
 
-```python
-from midataset.datasets import LungReader
-
-reader = LungReader(spacing=0)
+```yaml
+datasets:
+  - name: lung
+    labels: [0,1]
+    label_names: ['background', 'lung']
+    subpath: liver_datasetlung
 
 ```
+
+
+
+```python
+from midataset.datasets import load_dataset
+
+dataset = load_dataset('lung', spacing=0)
+
+dataset.generate_resampled(spacing=2)
+```
+
+
 
 `spacing=0` loads images from the `native` folder, `spacing=1`, from  `subsampled1mm`, and `spacing=[1,1,4]`, 
 from `subsampled1-1-4mm`.

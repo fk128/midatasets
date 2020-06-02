@@ -548,3 +548,46 @@ def extract_random_example_array(image_list, example_size=(1, 64, 64), n_example
     if was_singular:
         return examples[0]
     return examples
+
+
+from typing import List, Union
+
+def extract_random_nibabel(images , sample_shape=(1, 64, 64), n_samples=1):
+
+    if n_samples < 0:
+        raise Exception('n_samples should be greater than 0')
+#     if not all([i_s >= e_s for i_s, e_s in zip(images[0].shape, sample_shape)]):
+#         raise Exception('Image must be bigger than sample_shape')
+
+    was_singular = False
+    if not isinstance(images, list):
+        images = [images]
+        was_singular = True
+
+#     if  not (images[0].ndim - 1 == len(sample_shape) or images[0].ndim == len(sample_shape)):
+#         raise Exception('Example size does not match sampled dimensions')
+
+    # if not any([(img.ndim - 1 == images[0].ndim or img.ndim == images[0].ndim or img.ndim + 1 == images[
+    #             0].ndim) for img in images]):
+    #     raise Exception('image dimension mismatch')
+
+
+    rank = len(sample_shape)
+
+    valid_loc_range = [images[0].shape[i] - sample_shape[i] for i in range(rank)]
+
+    rnd_loc = [np.random.randint(valid_loc_range[dim], size=n_samples)
+               if valid_loc_range[dim] > 0 else np.zeros(n_samples, dtype=int) for dim in range(rank)]
+    print('here')
+    examples = [[]] * len(images)
+    for i in range(n_samples):
+        slicer = [slice(rnd_loc[dim][i], rnd_loc[dim][i] + sample_shape[dim]) for dim in range(rank)]
+
+        for j in range(len(images)):
+            ex_img = images[j][slicer[0],slicer[1],slicer[2]]
+            # concatenate and return the examples
+            examples[j] = np.concatenate((examples[j], ex_img), axis=0) if (len(examples[j]) != 0) else ex_img
+
+    if was_singular:
+        return examples[0]
+    return examples
