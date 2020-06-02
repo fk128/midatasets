@@ -13,18 +13,18 @@ cd midatasets && pip install -e .
 ### Configurations
 
 The default configuration are
-```
-[DEFAULT]
-root_path=/media/Datasets
-images_dir=images
-labelmaps_dir=labelmaps
-native_images_dir=native
-subsampled_images_dir_prefix=subsampled
-images_crop_prefix=images_crop_
-labelmaps_crop_prefix=labelmaps_crop_
+
+```yaml
+root_path: /media/Datasets
+images_dir: images
+labelmaps_dir: labelmaps
+native_images_dir: native
+subsampled_images_dir_prefix: subsampled
+images_crop_prefix: images_crop_
+labelmaps_crop_prefix: labelmaps_crop_
 ```
 
-which can be overridden by defining a file at `~/.midatasets.cfg`.
+which can be overridden by defining a file at  `~/.midatasets.yaml`.
 The main variable you need to change is `root_path`, which should point
 to the root directory path where you store your images.
 
