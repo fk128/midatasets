@@ -13,7 +13,7 @@ from joblib import Parallel, delayed
 
 import midatasets.preprocessing
 import midatasets.visualise as vis
-from midatasets import configs, augmentation
+from midatasets import configs
 from midatasets.preprocessing import sitk_resample, extract_vol_at_label
 from midatasets.utils import printProgressBar
 
@@ -291,13 +291,7 @@ class MIReader(object):
                                                                      example_size=subvol_size,
                                                                      n_examples=num)
 
-    def extract_random_multiscale_subvolume(self, img_idx, subvol_size, num, scale):
 
-        return augmentation.extract_random_multiscale_example_array([self.load_image(img_idx),
-                                                                     self.load_labelmap(img_idx)],
-                                                                    example_size=subvol_size,
-                                                                    scale=scale,
-                                                                    n_examples=num)
 
     def extract_random_class_balanced_subvolume(self, img_idx, subvol_size=(64, 64, 64), num=2, class_weights=[1, 1]):
 
