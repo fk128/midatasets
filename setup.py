@@ -3,7 +3,7 @@
 
 """The setup script."""
 
-from setuptools import setup
+from setuptools import find_packages, setup
 
 with open('README.md') as readme_file:
     readme = readme_file.read()
@@ -19,6 +19,7 @@ setup(name='midatasets',
       author='F. K.',
       keywords='medical ',
       license='Apache License 2.0',
+      packages=find_packages(),
       long_description=readme,
       classifiers=['Intended Audience :: Developers',
                    'Intended Audience :: Education',
