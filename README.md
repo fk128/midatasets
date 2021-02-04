@@ -73,20 +73,26 @@ To add a new dataset, simply create a yaml in your home directory `~/.midatasets
 
 
 ```yaml
+root_path: /workdir/datasets/
 datasets:
   - name: lung
     labels: [0,1]
     label_names: ['background', 'lung']
-    subpath: liver_datasetlung
+    subpath: lung
+    aws_s3_bucket: midatasets-bucket
+    aws_s3_prefix: datasets/lung
+    aws_profile: myprofile
 
 ```
-
 
 
 ```python
 from midataset.datasets import load_dataset
 
 dataset = load_dataset('lung', spacing=0)
+
+# download from s3
+#dataset.download()
 
 dataset.generate_resampled(spacing=2)
 ```
