@@ -7,6 +7,7 @@ import os
 from random import sample
 
 import SimpleITK as sitk
+import boto3
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
@@ -31,16 +32,21 @@ class MIReader(object):
                  is_cropped=False,
                  crop_size=64,
                  dir_path=None,
+                 subpath=None,
                  ext='.nii.gz',
                  label=None,
                  image_label=None,
                  images_only=False,
                  labels=None,
-                 label_names=None
+                 label_names=None,
+                 aws_s3_bucket=None,
+                 aws_profile=None,
+                 aws_s3_prefix=None
                  ):
 
         self.name = name
         self.dir_path = dir_path
+        self.subpath = subpath
         self.image_list = []
         self.labelmap_list = []
         self.boundingboxmap_list = []
@@ -56,6 +62,9 @@ class MIReader(object):
         self.images_only = images_only
         self.dataframe = pd.DataFrame()
         self.dataframe.index.name = 'name'
+        self.aws_s3_bucket = aws_s3_bucket
+        self.aws_profile = aws_profile
+        self.aws_s3_prefix = aws_s3_prefix
         self.setup()
 
     @classmethod
@@ -77,6 +86,28 @@ class MIReader(object):
 
     def get_root_path(self):
         return configs.get('root_path')
+
+    def download(self):
+        boto3.setup_default_session(profile_name=self.aws_profile)
+        _, base_dir, images_sub_dir = self.get_imagetype_path('images', split=True)
+        _, _, labelmaps_sub_dir = self.get_imagetype_path('labelmaps', split=True)
+        local_dir = self.dir_path
+
+        s3 = boto3.resource('s3')
+        bucket = s3.Bucket(self.aws_s3_bucket)
+        for prefix in [os.path.join(self.aws_s3_prefix, images_sub_dir),
+                       os.path.join(self.aws_s3_prefix, labelmaps_sub_dir)]:
+            for obj in bucket.objects.filter(Prefix=prefix):
+                target = os.path.join(local_dir, os.path.relpath(obj.key, self.aws_s3_prefix))
+                if os.path.exists(target):
+                    print(f'[already exists] {target}')
+                    continue
+                if not os.path.exists(os.path.dirname(target)):
+                    os.makedirs(os.path.dirname(target))
+                if obj.key[-1] == '/':
+                    continue
+                print(f'[Downloading] {target}')
+                bucket.download_file(obj.key, target)
 
     def setup(self):
         if self.dir_path is not None:
@@ -129,10 +160,10 @@ class MIReader(object):
             if v == 0:
                 return 1
 
-        # x = validate(int(img.GetDirection()[0]))
-        # y = validate(int(img.GetDirection()[4]))
-        # z = validate(int(img.GetDirection()[8]))
-        return sitk.GetArrayFromImage(img)[::-1, ::-1, ::1]
+        x = validate(int(img.GetDirection()[0]))
+        y = validate(int(img.GetDirection()[4]))
+        z = validate(int(img.GetDirection()[8]))
+        return sitk.GetArrayFromImage(img)[::x, ::y, ::z]
 
     def _preprocess(self, image):
         raise NotImplementedError()
@@ -160,7 +191,12 @@ class MIReader(object):
         else:
             return lst[0:num]
 
-    def get_imagetype_path(self, images_type, spacing=None, is_cropped=False, crop_suffix='_crop', crop_size=64):
+    def get_imagetype_path(self, images_type,
+                           spacing=None,
+                           is_cropped=False,
+                           crop_suffix='_crop',
+                           crop_size=64,
+                           split=False):
         if spacing is None:
             spacing = self.spacing
 
@@ -171,22 +207,23 @@ class MIReader(object):
         if is_cropped:
             suffix += crop_suffix + '_' + str(crop_size)
         if sum(spacing) <= 0:
-            path = os.path.join(self.dir_path, os.path.join(images_type + suffix, configs.get('native_images_dir')))
+            subpath = os.path.join(images_type + suffix, configs.get('native_images_dir'))
         else:
             if len(spacing) == 1:
-                path = os.path.join(self.dir_path,
-                                    os.path.join(images_type + suffix,
-                                                 configs.get('subsampled_images_dir_prefix') + str(
-                                                     spacing[0]) + 'mm'))
+                subpath = os.path.join(images_type + suffix,
+                                       configs.get('subsampled_images_dir_prefix') + str(
+                                           spacing[0]) + 'mm')
             else:
                 spacing_str = ''
                 for s in spacing:
                     spacing_str += str(s) + '-'
                 spacing_str = spacing_str[:-1]
-                path = os.path.join(self.dir_path,
-                                    os.path.join(images_type + suffix,
-                                                 configs.get('subsampled_images_dir_prefix') + spacing_str + 'mm'))
-        return path
+                subpath = os.path.join(images_type + suffix,
+                                       configs.get('subsampled_images_dir_prefix') + spacing_str + 'mm')
+        if split:
+            return self.dir_path.split(self.subpath)[0], self.subpath, subpath
+        else:
+            return os.path.join(self.dir_path, subpath)
 
     def get_image_name(self, img_idx):
         return self.dataframe.index[img_idx]
@@ -290,8 +327,6 @@ class MIReader(object):
                                                                       self.load_labelmap(img_idx)],
                                                                      example_size=subvol_size,
                                                                      n_examples=num)
-
-
 
     def extract_random_class_balanced_subvolume(self, img_idx, subvol_size=(64, 64, 64), num=2, class_weights=[1, 1]):
 

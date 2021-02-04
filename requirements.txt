@@ -7,3 +7,4 @@ pandas
 scikit-image
 pynrrd
 nibabel
+boto3
