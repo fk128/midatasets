@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import glob
 import os
+import pathlib
 from random import sample
 
 import SimpleITK as sitk
@@ -65,7 +66,10 @@ class MIReader(object):
         self.aws_s3_bucket = aws_s3_bucket
         self.aws_profile = aws_profile
         self.aws_s3_prefix = aws_s3_prefix
-        self.setup()
+        try:
+            self.setup()
+        except FileNotFoundError:
+            print('No files found. try calling .download()')
 
     @classmethod
     def from_dict(cls, **data):
@@ -103,11 +107,13 @@ class MIReader(object):
                     print(f'[already exists] {target}')
                     continue
                 if not os.path.exists(os.path.dirname(target)):
-                    os.makedirs(os.path.dirname(target))
+                    pathlib.Path(os.path.dirname(target)).mkdir(parents=True, exist_ok=True)
                 if obj.key[-1] == '/':
                     continue
                 print(f'[Downloading] {target}')
                 bucket.download_file(obj.key, target)
+
+        self.setup()
 
     def setup(self):
         if self.dir_path is not None:
