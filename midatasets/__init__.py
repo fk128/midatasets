@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-__version__ = '0.2.1'
+__version__ = '0.2.2'
 
 import os
 
@@ -17,10 +17,15 @@ configs = dict(root_path='/media/Datasets',
                aws_s3_profile=None
                )
 
-try:
-    with open(os.path.expanduser('~/.midatasets.yaml')) as f:
-        data = yaml.load(f, Loader=yaml.FullLoader)
-        configs.update(data)
-        configs['root_path'] = os.path.expandvars(configs['root_path'])
-except:
-    print('Error loading ~/.midatasets.yaml')
+
+def load_config(path='~/.midatasets.yaml'):
+    global configs
+    try:
+        with open(os.path.expanduser(path)) as f:
+            data = yaml.load(f, Loader=yaml.FullLoader)
+            configs.update(data)
+            configs['root_path'] = os.path.expandvars(configs['root_path'])
+    except:
+        print(f'Error loading {path}')
+
+load_config()
