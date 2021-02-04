@@ -12,11 +12,13 @@ configs = dict(root_path='/media/Datasets',
                native_images_dir='native',
                subsampled_images_dir_prefix='subsampled',
                images_crop_prefix='images_crop_',
-               labelmaps_crop_prefix='labelmaps_crop_')
+               labelmaps_crop_prefix='labelmaps_crop_'
+               )
 
 try:
     with open(os.path.expanduser('~/.midatasets.yaml')) as f:
         data = yaml.load(f, Loader=yaml.FullLoader)
         configs.update(data)
+        configs['root_path'] = os.path.expandvars(configs['root_path'])
 except:
     print('Error loading ~/.midatasets.yaml')
