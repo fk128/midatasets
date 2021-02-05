@@ -91,7 +91,7 @@ class MIReader(object):
     def get_root_path(self):
         return configs.get('root_path')
 
-    def download(self):
+    def download(self, max_images=None):
         boto3.setup_default_session(profile_name=self.aws_profile)
         _, base_dir, images_sub_dir = self.get_imagetype_path('images', split=True)
         _, _, labelmaps_sub_dir = self.get_imagetype_path('labelmaps', split=True)
@@ -99,9 +99,13 @@ class MIReader(object):
 
         s3 = boto3.resource('s3')
         bucket = s3.Bucket(self.aws_s3_bucket)
+        count = 0
         for prefix in [os.path.join(self.aws_s3_prefix, images_sub_dir),
                        os.path.join(self.aws_s3_prefix, labelmaps_sub_dir)]:
             for obj in bucket.objects.filter(Prefix=prefix):
+                if max_images and count > max_images:
+                    break
+                count += 1
                 target = os.path.join(local_dir, os.path.relpath(obj.key, self.aws_s3_prefix))
                 if os.path.exists(target):
                     print(f'[already exists] {target}')
