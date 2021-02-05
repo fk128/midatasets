@@ -8,3 +8,4 @@ scikit-image
 pynrrd
 nibabel
 boto3
+bumpversion==0.6.0
