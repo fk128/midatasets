@@ -207,6 +207,8 @@ class MIReader(object):
             spacing = self.spacing
 
         if type(spacing) in [int, float]:
+            if isinstance(spacing, float) and spacing.is_integer():
+                spacing = int(spacing)
             spacing = [spacing]
 
         suffix = ''
