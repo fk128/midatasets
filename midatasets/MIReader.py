@@ -68,7 +68,8 @@ class MIReader(object):
         self.aws_s3_prefix = aws_s3_prefix
         try:
             self.setup()
-        except FileNotFoundError:
+        except FileNotFoundError as e:
+            print(e)
             print('No files found. try calling .download()')
 
     @classmethod
@@ -99,9 +100,10 @@ class MIReader(object):
 
         s3 = boto3.resource('s3')
         bucket = s3.Bucket(self.aws_s3_bucket)
-        count = 0
+
         for prefix in [os.path.join(self.aws_s3_prefix, images_sub_dir),
                        os.path.join(self.aws_s3_prefix, labelmaps_sub_dir)]:
+            count = 0
             for obj in bucket.objects.filter(Prefix=prefix):
                 if max_images and count > max_images:
                     break
