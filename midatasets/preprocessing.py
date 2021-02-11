@@ -114,21 +114,27 @@ def resize_image_with_crop_or_pad(image, img_size=(64, 64, 64), loc=(2, 2, 2), *
     return np.pad(image[tuple(slicer)], to_padding, **kwargs)
 
 
-def sitk_resample(sitk_xslice, min_spacing, interpolation=sitk.sitkLinear):
+def sitk_resample(sitk_image, min_spacing, interpolation=sitk.sitkLinear):
     resampleSliceFilter = sitk.ResampleImageFilter()
+
     # Resample slice to isotropic
-    original_spacing = sitk_xslice.GetSpacing()
-    original_size = sitk_xslice.GetSize()
+    original_spacing = sitk_image.GetSpacing()
+    original_size = sitk_image.GetSize()
 
     new_spacing = [min_spacing, min_spacing, min_spacing]
     new_size = [int(round(original_size[0] * (original_spacing[0] / min_spacing))),
                 int(round(original_size[1] * (original_spacing[1] / min_spacing))),
                 int(round(original_size[2] * (original_spacing[2] / min_spacing)))]
-    sitk_isotropic_xslice = resampleSliceFilter.Execute(sitk_xslice, new_size, sitk.Transform(),
-                                                        interpolation, sitk_xslice.GetOrigin(),
-                                                        new_spacing, sitk_xslice.GetDirection(),
-                                                        0, sitk_xslice.GetPixelID())
-    return sitk_isotropic_xslice
+
+    resampleSliceFilter.SetOutputSpacing(new_spacing)
+    resampleSliceFilter.SetSize(new_size)
+    resampleSliceFilter.SetInterpolator(interpolation)
+    resampleSliceFilter.SetOutputDirection(sitk_image.GetDirection())
+    resampleSliceFilter.SetOutputOrigin(sitk_image.GetOrigin())
+    resampleSliceFilter.SetTransform(sitk.Transform())
+    resampleSliceFilter.SetDefaultPixelValue(sitk_image.GetPixelIDValue())
+
+    return resampleSliceFilter.Execute(sitk_image)
 
 
 def extract_alldims_mid_slices_at_label(image, labelmap, label=None, offset=0, is_tight=False):
@@ -550,27 +556,23 @@ def extract_random_example_array(image_list, example_size=(1, 64, 64), n_example
     return examples
 
 
-from typing import List, Union
-
-def extract_random_nibabel(images , sample_shape=(1, 64, 64), n_samples=1):
-
+def extract_random_nibabel(images, sample_shape=(1, 64, 64), n_samples=1):
     if n_samples < 0:
         raise Exception('n_samples should be greater than 0')
-#     if not all([i_s >= e_s for i_s, e_s in zip(images[0].shape, sample_shape)]):
-#         raise Exception('Image must be bigger than sample_shape')
+    #     if not all([i_s >= e_s for i_s, e_s in zip(images[0].shape, sample_shape)]):
+    #         raise Exception('Image must be bigger than sample_shape')
 
     was_singular = False
     if not isinstance(images, list):
         images = [images]
         was_singular = True
 
-#     if  not (images[0].ndim - 1 == len(sample_shape) or images[0].ndim == len(sample_shape)):
-#         raise Exception('Example size does not match sampled dimensions')
+    #     if  not (images[0].ndim - 1 == len(sample_shape) or images[0].ndim == len(sample_shape)):
+    #         raise Exception('Example size does not match sampled dimensions')
 
     # if not any([(img.ndim - 1 == images[0].ndim or img.ndim == images[0].ndim or img.ndim + 1 == images[
     #             0].ndim) for img in images]):
     #     raise Exception('image dimension mismatch')
-
 
     rank = len(sample_shape)
 
@@ -584,7 +586,7 @@ def extract_random_nibabel(images , sample_shape=(1, 64, 64), n_samples=1):
         slicer = [slice(rnd_loc[dim][i], rnd_loc[dim][i] + sample_shape[dim]) for dim in range(rank)]
 
         for j in range(len(images)):
-            ex_img = images[j][slicer[0],slicer[1],slicer[2]]
+            ex_img = images[j][slicer[0], slicer[1], slicer[2]]
             # concatenate and return the examples
             examples[j] = np.concatenate((examples[j], ex_img), axis=0) if (len(examples[j]) != 0) else ex_img
 

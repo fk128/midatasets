@@ -171,7 +171,6 @@ class MIReader(object):
         def validate(v):
             if v == 0:
                 return 1
-
         x = validate(int(img.GetDirection()[0]))
         y = validate(int(img.GetDirection()[4]))
         z = validate(int(img.GetDirection()[8]))
@@ -442,7 +441,7 @@ class MIReader(object):
         sitk_image = sitk_resample(sitk_image, spacing, sitk.sitkNearestNeighbor)
         sitk.WriteImage(sitk_image, output_path)
 
-    def generate_resampled(self, spacing, parallel=False):
+    def generate_resampled(self, spacing, parallel=True, num_workers=-1):
 
         def resample(img_idx, spacing):
             self.resample_image_and_save(img_idx=img_idx, spacing=spacing)
@@ -450,7 +449,13 @@ class MIReader(object):
                 self.resample_labelmap_and_save(img_idx=img_idx, spacing=spacing)
 
         if parallel:
-            Parallel(n_jobs=6)(delayed(resample)(i, spacing) for i in range(len(self)))
+            Parallel(n_jobs=num_workers)(delayed(resample)(i, spacing) for i in range(len(self)))
+        else:
+             for i in range(len(self)):
+                 print(i)
+                 resample(i, spacing)
+
+
 
     def extract_crop(self, i, label=None, vol_size=(64, 64, 64)):
 
