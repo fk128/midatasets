@@ -26,6 +26,6 @@ def load_config(path='~/.midatasets.yaml'):
             configs.update(data)
             configs['root_path'] = os.path.expandvars(configs['root_path'])
     except:
-        print(f'Error loading {path}')
+        pass
 
 load_config()

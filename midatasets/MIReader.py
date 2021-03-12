@@ -68,9 +68,8 @@ class MIReader(object):
         self.aws_s3_prefix = aws_s3_prefix
         try:
             self.setup()
-        except FileNotFoundError as e:
-            print(e)
-            print('No files found. try calling .download()')
+        except FileNotFoundError:
+            raise FileNotFoundError('No files found. try calling .download()')
 
     @classmethod
     def from_dict(cls, **data):
