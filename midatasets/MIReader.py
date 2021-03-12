@@ -42,7 +42,8 @@ class MIReader(object):
                  label_names=None,
                  aws_s3_bucket=None,
                  aws_profile=None,
-                 aws_s3_prefix=None
+                 aws_s3_prefix=None,
+                 fail_on_error=False
                  ):
 
         self.name = name
@@ -69,7 +70,10 @@ class MIReader(object):
         try:
             self.setup()
         except FileNotFoundError:
-            raise FileNotFoundError('No files found. try calling .download()')
+            if fail_on_error:
+                raise FileNotFoundError('No files found. try calling .download()')
+            else:
+                print('No files found. try calling .download()')
 
     @classmethod
     def from_dict(cls, **data):
