@@ -59,7 +59,7 @@ class MIReader(object):
         self.crop_size = crop_size
         self.ext = ext
         self.label = label
-        self.image_type_dirs = []
+        self.image_type_dirs = set()
         self.image_label = image_label
         self.images_only = images_only
         self.dataframe = pd.DataFrame()
@@ -141,11 +141,10 @@ class MIReader(object):
         for image_type in image_types:
             image_type_path = image_type_paths[image_type]
             image_type = image_type_path.name
-            self.image_type_dirs.append(image_type)
+            self.image_type_dirs.add(image_type)
             image_type = configs.get('remap_dirs', {}).get(image_type, image_type)
 
             for image_path in (image_type_path / self.get_spacing_dirname()).glob('*' + self.ext):
-                print(image_path)
                 name = image_path.name.replace(self.ext, '')
                 for existing_name in self.dataframe.index:
                     if existing_name in name:  # check if subset of existing name
@@ -157,6 +156,8 @@ class MIReader(object):
             self.dataframe = self.dataframe[['image_path']].dropna()
         else:
             self.dataframe.dropna(inplace=True)
+
+
 
     @property
     def num_images(self):
@@ -430,7 +431,7 @@ class MIReader(object):
             os.makedirs(output_path, exist_ok=True)
             output_path = os.path.join(output_path, name + '.nii.gz')
             if os.path.exists(output_path) and not overwrite:
-                print('already exists')
+                print(f'[{image_type}/{name}] already exists')
                 return
             sitk_image = self.load_sitk_image(img_idx)
             print(f'[{image_type}/{name}] resampling from', sitk_image.GetSpacing(), 'to', spacing,
@@ -440,14 +441,15 @@ class MIReader(object):
 
     def resample_labelmap_and_save(self, img_idx, spacing, overwrite=False):
         name = self.get_image_name(img_idx)
+
         for image_type in self.image_type_dirs:
-            if 'image' in image_type:
+            if 'labelmap' not in image_type:
                 continue
             output_path = self.get_imagetype_path(image_type, spacing=spacing)
             os.makedirs(output_path, exist_ok=True)
             output_path = os.path.join(output_path, name + '.nii.gz')
             if os.path.exists(output_path) and not overwrite:
-                print('already exists')
+                print(f'[{image_type}/{name}] already exists')
                 return
             sitk_image = self.load_sitk_labelmap(img_idx)
             print(f'[{image_type}/{name}] resampling from', sitk_image.GetSpacing(), 'to', spacing,
