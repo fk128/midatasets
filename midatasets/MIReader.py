@@ -157,8 +157,6 @@ class MIReader(object):
         else:
             self.dataframe.dropna(inplace=True)
 
-
-
     @property
     def num_images(self):
         return len(self.image_list)
@@ -422,53 +420,33 @@ class MIReader(object):
         self.image_list = image_list
         self.labelmap_list = labelmap_list
 
-    def resample_image_and_save(self, img_idx, spacing, overwrite=False):
-        name = self.get_image_name(img_idx)
-        for image_type in self.image_type_dirs:
-            if 'labelmap' in image_type:
-                continue
-            output_path = self.get_imagetype_path(image_type, spacing=spacing)
-            os.makedirs(output_path, exist_ok=True)
-            output_path = os.path.join(output_path, name + '.nii.gz')
-            if os.path.exists(output_path) and not overwrite:
-                print(f'[{image_type}/{name}] already exists')
-                return
-            sitk_image = self.load_sitk_image(img_idx)
-            print(f'[{image_type}/{name}] resampling from', sitk_image.GetSpacing(), 'to', spacing,
-                  'using bilinear interpolation')
-            sitk_image = sitk_resample(sitk_image, spacing)
-            sitk.WriteImage(sitk_image, output_path)
+    def generate_resampled(self, spacing, parallel=True, num_workers=-1, image_types=None, overwrite=False):
 
-    def resample_labelmap_and_save(self, img_idx, spacing, overwrite=False):
-        name = self.get_image_name(img_idx)
+        def resample(paths, target_spacing):
+            for k, path in paths.items():
+                image_type = k.replace('_path', '')
+                if 'path' not in k or (image_types and image_type not in image_types):
+                    continue
 
-        for image_type in self.image_type_dirs:
-            if 'labelmap' not in image_type:
-                continue
-            output_path = self.get_imagetype_path(image_type, spacing=spacing)
-            os.makedirs(output_path, exist_ok=True)
-            output_path = os.path.join(output_path, name + '.nii.gz')
-            if os.path.exists(output_path) and not overwrite:
-                print(f'[{image_type}/{name}] already exists')
-                return
-            sitk_image = self.load_sitk_labelmap(img_idx)
-            print(f'[{image_type}/{name}] resampling from', sitk_image.GetSpacing(), 'to', spacing,
-                  'using nearest neighbor interpolation')
-            sitk_image = sitk_resample(sitk_image, spacing, sitk.sitkNearestNeighbor)
-            sitk.WriteImage(sitk_image, output_path)
-
-    def generate_resampled(self, spacing, parallel=True, num_workers=-1):
-
-        def resample(img_idx, spacing):
-            self.resample_image_and_save(img_idx=img_idx, spacing=spacing)
-            if self.has_labelmap():
-                self.resample_labelmap_and_save(img_idx=img_idx, spacing=spacing)
+                output_path = path.replace(self.get_spacing_dirname(), self.get_spacing_dirname(target_spacing))
+                if Path(output_path).exists() and not overwrite:
+                    print(
+                        f'[{image_type}/{self.get_spacing_dirname(target_spacing)}/{Path(output_path).name}] already exists')
+                    continue
+                Path(output_path).parent.mkdir(exist_ok=True, parents=True)
+                sitk_image = sitk.ReadImage(path)
+                interpolation = sitk.sitkLinear if 'image' in image_type else sitk.sitkNearestNeighbor
+                interpolation_str = "sitk.sitkLinear" if 'image' in image_type else "sitk.sitkNearestNeighbor"
+                print(f'[{image_type}/{Path(output_path).name}] resampling from', sitk_image.GetSpacing(), 'to',
+                      target_spacing,
+                      f'using {interpolation_str}')
+                sitk_image = sitk_resample(sitk_image, spacing, interpolation=interpolation)
+                sitk.WriteImage(sitk_image, output_path)
 
         if parallel:
-            Parallel(n_jobs=num_workers)(delayed(resample)(i, spacing) for i in range(len(self)))
+            Parallel(n_jobs=num_workers)(delayed(resample)(paths, spacing) for paths in self)
         else:
-            for i in range(len(self)):
-                resample(i, spacing)
+            [resample(paths, spacing) for paths in self]
 
     def extract_crop(self, i, label=None, vol_size=(64, 64, 64)):
 
