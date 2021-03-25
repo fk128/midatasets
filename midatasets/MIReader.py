@@ -152,11 +152,11 @@ class MIReader(object):
                         name = existing_name
 
                 self.dataframe.loc[name, f'{image_type}_path'] = str(image_path)
-            print(self.dataframe)
-        # if self.images_only:
-        #     self.dataframe = self.dataframe[['image_path']].dropna()
-        # else:
-        #     self.dataframe.dropna(inplace=True)
+
+        if self.images_only:
+            self.dataframe = self.dataframe[['image_path']].dropna()
+        else:
+            self.dataframe.dropna(inplace=True)
 
     @property
     def num_images(self):
