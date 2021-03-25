@@ -134,24 +134,29 @@ class MIReader(object):
             return
 
         dataset_path = Path(self.dir_path)
-
-        for image_type_path in dataset_path.iterdir():
+        image_type_paths = {image_type_path.name: image_type_path for image_type_path in dataset_path.iterdir()}
+        image_types = list(image_type_paths.keys())
+        image_types.remove('images')
+        image_types = ['images'] + image_types
+        for image_type in image_types:
+            image_type_path = image_type_paths[image_type]
             image_type = image_type_path.name
             self.image_type_dirs.append(image_type)
             image_type = configs.get('remap_dirs', {}).get(image_type, image_type)
 
-            for image_path in (image_type_path / self.get_spacing_dirname()).glob('*.gz'):
+            for image_path in (image_type_path / self.get_spacing_dirname()).glob('*' + self.ext):
+                print(image_path)
                 name = image_path.name.replace(self.ext, '')
                 for existing_name in self.dataframe.index:
                     if existing_name in name:  # check if subset of existing name
                         name = existing_name
 
                 self.dataframe.loc[name, f'{image_type}_path'] = str(image_path)
-
-        if self.images_only:
-            self.dataframe = self.dataframe[['image_path']].dropna()
-        else:
-            self.dataframe.dropna(inplace=True)
+            print(self.dataframe)
+        # if self.images_only:
+        #     self.dataframe = self.dataframe[['image_path']].dropna()
+        # else:
+        #     self.dataframe.dropna(inplace=True)
 
     @property
     def num_images(self):
