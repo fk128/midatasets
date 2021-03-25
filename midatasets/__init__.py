@@ -14,7 +14,8 @@ configs = dict(root_path='/media/Datasets',
                images_crop_prefix='images_crop_',
                labelmaps_crop_prefix='labelmaps_crop_',
                aws_s3_bucket=None,
-               aws_s3_profile=None
+               aws_s3_profile=None,
+               remap_dirs={'images': 'image', 'labelmaps': 'labelmap'}
                )
 
 

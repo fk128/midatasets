@@ -2,9 +2,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import glob
 import os
 import pathlib
+from pathlib import Path
 from random import sample
 
 import SimpleITK as sitk
@@ -60,6 +60,7 @@ class MIReader(object):
         self.crop_size = crop_size
         self.ext = ext
         self.label = label
+        self.image_type_dirs = []
         self.image_label = image_label
         self.images_only = images_only
         self.dataframe = pd.DataFrame()
@@ -125,39 +126,28 @@ class MIReader(object):
         self.setup()
 
     def setup(self):
-        if self.dir_path is not None:
-            if self.image_label is not None:
-                image_dir_name = os.path.join(configs.get('images_dir'), self.image_label)
-            else:
-                image_dir_name = configs.get('images_dir')
+        if self.dir_path is None:
+            return
 
-            if self.label is not None:
-                labelmap_dir_name = os.path.join(configs.get('labelmaps_dir'), self.label)
-            else:
-                labelmap_dir_name = configs.get('labelmaps_dir')
+        dataset_path = Path(self.dir_path)
 
-            root = self.get_imagetype_path(image_dir_name, is_cropped=self.is_cropped)
-            label_root = self.get_imagetype_path(labelmap_dir_name, is_cropped=self.is_cropped)
+        for image_type_path in dataset_path.iterdir():
+            image_type = image_type_path.name
+            self.image_type_dirs.append(image_type)
+            image_type = configs.get('remap_dirs', {}).get(image_type, image_type)
 
-            for image_filename in os.listdir(root):
-                name = image_filename.replace(self.ext, '')
-                # name = name.split('_')[0]
+            for image_path in (image_type_path / self.get_spacing_dirname()).glob('*.gz'):
+                name = image_path.name.replace(self.ext, '')
+                for existing_name in self.dataframe.index:
+                    if existing_name in name:  # check if subset of existing name
+                        name = existing_name
 
-                if self.is_cropped:
-                    name = name.replace('_' + configs.get('images_crop_prefix') + str(self.crop_size), '')
-                self.dataframe.loc[name, 'image_path'] = os.path.join(root, image_filename)
-                labelmap_path = glob.glob(os.path.join(label_root, name + '*' + self.ext))
-                # try using prefix only to see if there is a match
-                # if len(labelmap_path) == 0:
-                #     name = name.split('_')[0]
-                #     labelmap_path = glob.glob(os.path.join(label_root, name + '*' + self.ext))
+                self.dataframe.loc[name, f'{image_type}_path'] = str(image_path)
 
-                if len(labelmap_path) == 1:
-                    self.dataframe.loc[name, 'labelmap_path'] = labelmap_path[0]
-            if not self.images_only:
-                self.dataframe.dropna(inplace=True)
-            else:
-                self.dataframe = self.dataframe[['image_path']].dropna()
+        if self.images_only:
+            self.dataframe = self.dataframe[['image_path']].dropna()
+        else:
+            self.dataframe.dropna(inplace=True)
 
     @property
     def num_images(self):
@@ -174,6 +164,7 @@ class MIReader(object):
         def validate(v):
             if v == 0:
                 return 1
+
         x = validate(int(img.GetDirection()[0]))
         y = validate(int(img.GetDirection()[4]))
         z = validate(int(img.GetDirection()[8]))
@@ -205,12 +196,8 @@ class MIReader(object):
         else:
             return lst[0:num]
 
-    def get_imagetype_path(self, images_type,
-                           spacing=None,
-                           is_cropped=False,
-                           crop_suffix='_crop',
-                           crop_size=64,
-                           split=False):
+    def get_spacing_dirname(self, spacing=None):
+
         if spacing is None:
             spacing = self.spacing
 
@@ -219,23 +206,30 @@ class MIReader(object):
                 spacing = int(spacing)
             spacing = [spacing]
 
-        suffix = ''
-        if is_cropped:
-            suffix += crop_suffix + '_' + str(crop_size)
         if sum(spacing) <= 0:
-            subpath = os.path.join(images_type + suffix, configs.get('native_images_dir'))
+            spacing_dirname = configs.get('native_images_dir')
+        elif len(spacing) == 1:
+            spacing_dirname = configs.get('subsampled_images_dir_prefix') + str(spacing[0]) + 'mm'
         else:
-            if len(spacing) == 1:
-                subpath = os.path.join(images_type + suffix,
-                                       configs.get('subsampled_images_dir_prefix') + str(
-                                           spacing[0]) + 'mm')
-            else:
-                spacing_str = ''
-                for s in spacing:
-                    spacing_str += str(s) + '-'
-                spacing_str = spacing_str[:-1]
-                subpath = os.path.join(images_type + suffix,
-                                       configs.get('subsampled_images_dir_prefix') + spacing_str + 'mm')
+            spacing_str = ''
+            for s in spacing:
+                spacing_str += str(s) + '-'
+            spacing_str = spacing_str[:-1]
+            spacing_dirname = configs.get('subsampled_images_dir_prefix') + spacing_str + 'mm'
+
+        return spacing_dirname
+
+    def get_imagetype_path(self, images_type,
+                           crop_suffix='_crop',
+                           spacing=None,
+                           split=False):
+
+        suffix = ''
+        if self.is_cropped:
+            suffix += crop_suffix + '_' + str(self.crop_size)
+
+        subpath = os.path.join(images_type + suffix, self.get_spacing_dirname(spacing=spacing))
+
         if split:
             return self.dir_path.split(self.subpath)[0], self.subpath, subpath
         else:
@@ -420,29 +414,37 @@ class MIReader(object):
 
     def resample_image_and_save(self, img_idx, spacing, overwrite=False):
         name = self.get_image_name(img_idx)
-        output_path = self.get_imagetype_path('images', spacing=spacing)
-        os.makedirs(output_path, exist_ok=True)
-        output_path = os.path.join(output_path, name + '.nii.gz')
-        if os.path.exists(output_path) and not overwrite:
-            print('already exists')
-            return
-        sitk_image = self.load_sitk_image(img_idx)
-        print('resampling from', sitk_image.GetSpacing(), 'to', spacing)
-        sitk_image = sitk_resample(sitk_image, spacing)
-        sitk.WriteImage(sitk_image, output_path)
+        for image_type in self.image_type_dirs:
+            if 'labelmap' in image_type:
+                continue
+            output_path = self.get_imagetype_path(image_type, spacing=spacing)
+            os.makedirs(output_path, exist_ok=True)
+            output_path = os.path.join(output_path, name + '.nii.gz')
+            if os.path.exists(output_path) and not overwrite:
+                print('already exists')
+                return
+            sitk_image = self.load_sitk_image(img_idx)
+            print(f'[{image_type}/{name}] resampling from', sitk_image.GetSpacing(), 'to', spacing,
+                  'using bilinear interpolation')
+            sitk_image = sitk_resample(sitk_image, spacing)
+            sitk.WriteImage(sitk_image, output_path)
 
     def resample_labelmap_and_save(self, img_idx, spacing, overwrite=False):
         name = self.get_image_name(img_idx)
-        output_path = self.get_imagetype_path('labelmaps', spacing=spacing)
-        os.makedirs(output_path, exist_ok=True)
-        output_path = os.path.join(output_path, name + '.nii.gz')
-        if os.path.exists(output_path) and not overwrite:
-            print('already exists')
-            return
-        sitk_image = self.load_sitk_labelmap(img_idx)
-        print('resampling from', sitk_image.GetSpacing(), 'to', spacing)
-        sitk_image = sitk_resample(sitk_image, spacing, sitk.sitkNearestNeighbor)
-        sitk.WriteImage(sitk_image, output_path)
+        for image_type in self.image_type_dirs:
+            if 'image' in image_type:
+                continue
+            output_path = self.get_imagetype_path(image_type, spacing=spacing)
+            os.makedirs(output_path, exist_ok=True)
+            output_path = os.path.join(output_path, name + '.nii.gz')
+            if os.path.exists(output_path) and not overwrite:
+                print('already exists')
+                return
+            sitk_image = self.load_sitk_labelmap(img_idx)
+            print(f'[{image_type}/{name}] resampling from', sitk_image.GetSpacing(), 'to', spacing,
+                  'using nearest neighbor interpolation')
+            sitk_image = sitk_resample(sitk_image, spacing, sitk.sitkNearestNeighbor)
+            sitk.WriteImage(sitk_image, output_path)
 
     def generate_resampled(self, spacing, parallel=True, num_workers=-1):
 
@@ -454,11 +456,8 @@ class MIReader(object):
         if parallel:
             Parallel(n_jobs=num_workers)(delayed(resample)(i, spacing) for i in range(len(self)))
         else:
-             for i in range(len(self)):
-                 print(i)
-                 resample(i, spacing)
-
-
+            for i in range(len(self)):
+                resample(i, spacing)
 
     def extract_crop(self, i, label=None, vol_size=(64, 64, 64)):
 
