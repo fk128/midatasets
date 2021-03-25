@@ -9,12 +9,11 @@ from random import sample
 
 import SimpleITK as sitk
 import boto3
+import midatasets.preprocessing
+import midatasets.visualise as vis
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
-
-import midatasets.preprocessing
-import midatasets.visualise as vis
 from midatasets import configs
 from midatasets.preprocessing import sitk_resample, extract_vol_at_label
 from midatasets.utils import printProgressBar
@@ -101,12 +100,17 @@ class MIReader(object):
         _, base_dir, images_sub_dir = self.get_imagetype_path('images', split=True)
         _, _, labelmaps_sub_dir = self.get_imagetype_path('labelmaps', split=True)
         local_dir = self.dir_path
+        spacing_dirname = self.get_spacing_dirname()
 
         s3 = boto3.resource('s3')
         bucket = s3.Bucket(self.aws_s3_bucket)
 
-        for prefix in [os.path.join(self.aws_s3_prefix, images_sub_dir),
-                       os.path.join(self.aws_s3_prefix, labelmaps_sub_dir)]:
+        client = boto3.client('s3')
+        result = client.list_objects(Bucket=self.aws_s3_bucket, Prefix=self.aws_s3_prefix + '/', Delimiter='/')
+        subdirs = [o.get('Prefix') for o in result.get('CommonPrefixes')]
+
+        dirs_to_download = [os.path.join(subdir, spacing_dirname) for subdir in subdirs]
+        for prefix in dirs_to_download:
             count = 0
             for obj in bucket.objects.filter(Prefix=prefix):
                 if max_images and count > max_images:
