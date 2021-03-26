@@ -9,11 +9,12 @@ from random import sample
 
 import SimpleITK as sitk
 import boto3
-import midatasets.preprocessing
-import midatasets.visualise as vis
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
+
+import midatasets.preprocessing
+import midatasets.visualise as vis
 from midatasets import configs
 from midatasets.preprocessing import sitk_resample, extract_vol_at_label
 from midatasets.utils import printProgressBar
@@ -106,7 +107,8 @@ class MIReader(object):
         bucket = s3.Bucket(self.aws_s3_bucket)
 
         client = boto3.client('s3')
-        result = client.list_objects(Bucket=self.aws_s3_bucket, Prefix=self.aws_s3_prefix + '/', Delimiter='/')
+        self.aws_s3_prefix = self.aws_s3_prefix if self.aws_s3_prefix.endswith('/') else self.aws_s3_prefix + '/'
+        result = client.list_objects(Bucket=self.aws_s3_bucket, Prefix=self.aws_s3_prefix, Delimiter='/')
         subdirs = [o.get('Prefix') for o in result.get('CommonPrefixes')]
 
         dirs_to_download = [os.path.join(subdir, spacing_dirname) for subdir in subdirs]
