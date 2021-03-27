@@ -1,11 +1,12 @@
-numpy
-scipy
+numpy>= 1.20.0
+scipy>=1.6.0
 matplotlib
-pydicom
-SimpleITK
+pydicom>=2.1.2
+SimpleITK>=2.0.2
 pandas
 scikit-image
 pynrrd
 nibabel
 boto3
+joblib>=1.0.1
 bumpversion==0.6.0
