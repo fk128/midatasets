@@ -14,7 +14,7 @@ with open('requirements.txt') as requirements_file:
 
 
 setup(name='midatasets',
-      version='0.3.10',
+      version='0.3.11',
       description='Medical Image Dataset tools',
       author='F. K.',
       keywords='medical ',
