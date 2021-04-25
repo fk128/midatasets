@@ -97,7 +97,8 @@ class MIReader(object):
         return configs.get('root_path')
 
     def download(self, max_images=None):
-        boto3.setup_default_session(profile_name=self.aws_profile)
+        if 'AWS_SECRET_ACCESS_KEY' not in os.environ and 'AWS_ACCESS_KEY_ID' not in os.environ:
+            boto3.setup_default_session(profile_name=self.aws_profile)
         _, base_dir, images_sub_dir = self.get_imagetype_path('images', split=True)
         _, _, labelmaps_sub_dir = self.get_imagetype_path('labelmaps', split=True)
         local_dir = self.dir_path
