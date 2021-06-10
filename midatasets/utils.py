@@ -208,9 +208,18 @@ def get_spacing_dirname(spacing):
     return spacing_dirname
 
 
-def grouped_files(files_iter, ext, dataset_path):
+def grouped_files(files_iter, ext, dataset_path, key='path'):
+    """
+    group files by spacing/name/image_type
+    :param files_iter:
+    :param ext:
+    :param dataset_path:
+    :param key:
+    :return:
+    """
     files = defaultdict(dict)
-    for file_path in files_iter:
+    for basefile_path in files_iter:
+        file_path = basefile_path[key]
         prefix = str(Path(file_path).relative_to(dataset_path))
         try:
             image_type, spacing, filename = prefix.split('/')
@@ -226,5 +235,5 @@ def grouped_files(files_iter, ext, dataset_path):
                 name = existing_name
                 break
 
-        files[spacing][name][f'{image_type}_path'] = str(file_path)
+        files[spacing][name][image_type] = {k: str(v) for k, v in basefile_path.items()}
     return {k: dict(v) for k, v in files.items()}

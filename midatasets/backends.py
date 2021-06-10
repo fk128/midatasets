@@ -67,7 +67,7 @@ class S3Backend(StorageBackend):
             result = self.client.list_objects(Bucket=self.bucket, Prefix=prefix).get('Contents', None)
             if not result:
                 raise FileNotFoundError(f's3://{self.bucket}/{prefix} not found')
-            files += [r['Key'] for r in result]
+            files += [{'path': r['Key']} for r in result]
         if grouped:
             return grouped_files(files, ext, dataset_path=src_prefix)
         else:
@@ -123,10 +123,9 @@ class LocalStorageBackend(StorageBackend):
             prefix = dataset_path
             prefix = prefix / image_type
             prefix = prefix if spacing is None else prefix / get_spacing_dirname(spacing)
-
             files_iter = (dataset_path / prefix).rglob('*' + ext)
             files += list(files_iter)
-
+        files = [{'path': f} for f in files]
         if grouped:
             return grouped_files(files, ext, dataset_path=dataset_path)
         else:

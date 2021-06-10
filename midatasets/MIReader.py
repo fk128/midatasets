@@ -129,6 +129,8 @@ class MIReader(object):
         if not files:
             raise FileNotFoundError
         files = next(iter(files.values()))
+        for name, images in files.items():
+            files[name] = {f'{k}_path': v['path'] for k, v in images.items()}
 
         self.dataframe = pd.DataFrame.from_dict(files, orient='index')
         self.dataframe.dropna(inplace=True, subset=['image_path'])
