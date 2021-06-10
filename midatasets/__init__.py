@@ -6,7 +6,8 @@ import os
 
 import yaml
 
-configs = dict(root_path='/media/Datasets',
+configs = dict(root_path='/media/datasets',
+               root_s3_prefix='datasets/',
                images_dir='images',
                labelmaps_dir='labelmaps',
                native_images_dir='native',
@@ -28,5 +29,6 @@ def load_config(path='~/.midatasets.yaml'):
             configs['root_path'] = os.path.expandvars(configs['root_path'])
     except:
         pass
+
 
 load_config()

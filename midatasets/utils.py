@@ -1,10 +1,14 @@
 import os
+from collections import defaultdict
+from pathlib import Path
 
 import SimpleITK as sitk
 import numpy as np
-import pydicom as dicom
 import pandas as pd
+import pydicom as dicom
 from skimage.draw import polygon
+
+from midatasets import configs
 
 
 def printProgressBar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█'):
@@ -182,3 +186,45 @@ def export_train_test_split(reader, out_dir='.', type='csv', ratio=0.66, seed=42
         df['name'] = reader.get_image_names()
         df.set_index('name', inplace=True)
         df.to_csv(os.path.join(out_dir, name + '_image_labelmap_list.csv'))
+
+
+def get_spacing_dirname(spacing):
+    if type(spacing) in [int, float]:
+        if isinstance(spacing, float) and spacing.is_integer():
+            spacing = int(spacing)
+        spacing = [spacing]
+
+    if sum(spacing) <= 0:
+        spacing_dirname = configs.get('native_images_dir')
+    elif len(spacing) == 1:
+        spacing_dirname = configs.get('subsampled_images_dir_prefix') + str(spacing[0]) + 'mm'
+    else:
+        spacing_str = ''
+        for s in spacing:
+            spacing_str += str(s) + '-'
+        spacing_str = spacing_str[:-1]
+        spacing_dirname = configs.get('subsampled_images_dir_prefix') + spacing_str + 'mm'
+
+    return spacing_dirname
+
+
+def grouped_files(files_iter, ext, dataset_path):
+    files = defaultdict(dict)
+    for file_path in files_iter:
+        prefix = str(Path(file_path).relative_to(dataset_path))
+        try:
+            image_type, spacing, filename = prefix.split('/')
+        except:
+            continue
+        name = filename.replace(ext, '')
+        image_type = configs.get('remap_dirs', {}).get(image_type, image_type)
+        if spacing not in files:
+            files[spacing] = defaultdict(dict)
+
+        for existing_name in files[spacing].keys():
+            if existing_name in name:  # check if subset of existing name
+                name = existing_name
+                break
+
+        files[spacing][name][f'{image_type}_path'] = str(file_path)
+    return {k: dict(v) for k, v in files.items()}

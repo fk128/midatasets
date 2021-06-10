@@ -3,12 +3,11 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-import pathlib
 from pathlib import Path
 from random import sample
+from typing import Optional, List, Callable
 
 import SimpleITK as sitk
-import boto3
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
@@ -16,8 +15,9 @@ from joblib import Parallel, delayed
 import midatasets.preprocessing
 import midatasets.visualise as vis
 from midatasets import configs
+from midatasets.backends import LocalStorageBackend, S3Backend
 from midatasets.preprocessing import sitk_resample, extract_vol_at_label
-from midatasets.utils import printProgressBar
+from midatasets.utils import printProgressBar, get_spacing_dirname
 
 
 class MIReader(object):
@@ -30,20 +30,21 @@ class MIReader(object):
     def __init__(self,
                  spacing,
                  name='reader',
-                 is_cropped=False,
-                 crop_size=64,
-                 dir_path=None,
-                 subpath=None,
-                 ext='.nii.gz',
-                 label=None,
-                 image_label=None,
-                 images_only=False,
-                 labels=None,
-                 label_names=None,
-                 aws_s3_bucket=None,
-                 aws_profile=None,
-                 aws_s3_prefix=None,
-                 fail_on_error=False
+                 is_cropped: bool = False,
+                 crop_size: int = 64,
+                 dir_path: Optional[str] = None,
+                 subpath: Optional[str] = None,
+                 ext: str = '.nii.gz',
+                 label: Optional[str] = None,
+                 image_label: Optional[str] = None,
+                 images_only: bool = False,
+                 labels: Optional[List[str]] = None,
+                 label_names: Optional[List[str]] = None,
+                 aws_s3_bucket: Optional[str] = None,
+                 aws_profile: Optional[str] = None,
+                 aws_s3_prefix: Optional[str] = None,
+                 fail_on_error: bool = False,
+                 RemoteBackend: Optional[Callable] = S3Backend
                  ):
 
         self.name = name
@@ -68,6 +69,13 @@ class MIReader(object):
         self.aws_s3_bucket = aws_s3_bucket
         self.aws_profile = aws_profile
         self.aws_s3_prefix = aws_s3_prefix
+        # in case local subdir is different from remote prefix
+        self.aws_dataset_name = self.aws_s3_prefix.replace(configs.get('root_s3_prefix'), '').replace('/', '')
+        self.local_dataset_name = Path(self.dir_path).stem
+        self.local_backend = LocalStorageBackend(root_path=self.get_root_path())
+        self.remote_backend = RemoteBackend(bucket=aws_s3_bucket,
+                                            prefix=configs.get('root_s3_prefix'),
+                                            profile=aws_profile)
         try:
             self.setup()
         except FileNotFoundError:
@@ -96,69 +104,34 @@ class MIReader(object):
     def get_root_path(self):
         return configs.get('root_path')
 
-    def download(self, max_images=None):
-        if 'AWS_SECRET_ACCESS_KEY' not in os.environ and 'AWS_ACCESS_KEY_ID' not in os.environ:
-            boto3.setup_default_session(profile_name=self.aws_profile)
-        _, base_dir, images_sub_dir = self.get_imagetype_path('images', split=True)
-        _, _, labelmaps_sub_dir = self.get_imagetype_path('labelmaps', split=True)
-        local_dir = self.dir_path
-        spacing_dirname = self.get_spacing_dirname()
-
-        s3 = boto3.resource('s3')
-        bucket = s3.Bucket(self.aws_s3_bucket)
-
-        client = boto3.client('s3')
-        self.aws_s3_prefix = self.aws_s3_prefix if self.aws_s3_prefix.endswith('/') else self.aws_s3_prefix + '/'
-        result = client.list_objects(Bucket=self.aws_s3_bucket, Prefix=self.aws_s3_prefix, Delimiter='/')
-        subdirs = [o.get('Prefix') for o in result.get('CommonPrefixes')]
-
-        dirs_to_download = [os.path.join(subdir, spacing_dirname) for subdir in subdirs]
-        for prefix in dirs_to_download:
-            count = 0
-            for obj in bucket.objects.filter(Prefix=prefix):
-                if max_images and count > max_images:
-                    break
-                count += 1
-                target = os.path.join(local_dir, os.path.relpath(obj.key, self.aws_s3_prefix))
-                if os.path.exists(target):
-                    print(f'[already exists] {target}')
-                    continue
-                if not os.path.exists(os.path.dirname(target)):
-                    pathlib.Path(os.path.dirname(target)).mkdir(parents=True, exist_ok=True)
-                if obj.key[-1] == '/':
-                    continue
-                print(f'[Downloading] {target}')
-                bucket.download_file(obj.key, target)
-
+    def download(self, max_images=None, dryrun=False):
+        """
+        download images using remote backend
+        :param max_images:
+        :param dryrun:
+        :return:
+        """
+        self.remote_backend.download(
+            dataset_name=self.aws_dataset_name,
+            dest_root_path=self.get_root_path(),
+            spacing=self.spacing, ext=self.ext,
+            dryrun=dryrun, max_images=max_images)
         self.setup()
 
     def setup(self):
         if self.dir_path is None:
             return
+        files = self.local_backend.list_files(
+            dataset_name=self.local_dataset_name,
+            spacing=self.spacing,
+            ext=self.ext,
+            grouped=True)
+        if not files:
+            raise FileNotFoundError
+        files = next(iter(files.values()))
 
-        dataset_path = Path(self.dir_path)
-        image_type_paths = {image_type_path.name: image_type_path for image_type_path in dataset_path.iterdir()}
-        image_types = list(image_type_paths.keys())
-        image_types.remove('images')
-        image_types = ['images'] + image_types
-        for image_type in image_types:
-            image_type_path = image_type_paths[image_type]
-            image_type = image_type_path.name
-            self.image_type_dirs.add(image_type)
-            image_type = configs.get('remap_dirs', {}).get(image_type, image_type)
-
-            for image_path in (image_type_path / self.get_spacing_dirname()).glob('*' + self.ext):
-                name = image_path.name.replace(self.ext, '')
-                for existing_name in self.dataframe.index:
-                    if existing_name in name:  # check if subset of existing name
-                        name = existing_name
-
-                self.dataframe.loc[name, f'{image_type}_path'] = str(image_path)
-
-        if self.images_only:
-            self.dataframe = self.dataframe[['image_path']].dropna()
-        else:
-            self.dataframe.dropna(inplace=True)
+        self.dataframe = pd.DataFrame.from_dict(files, orient='index')
+        self.dataframe.dropna(inplace=True, subset=['image_path'])
 
     @property
     def num_images(self):
@@ -208,27 +181,7 @@ class MIReader(object):
             return lst[0:num]
 
     def get_spacing_dirname(self, spacing=None):
-
-        if spacing is None:
-            spacing = self.spacing
-
-        if type(spacing) in [int, float]:
-            if isinstance(spacing, float) and spacing.is_integer():
-                spacing = int(spacing)
-            spacing = [spacing]
-
-        if sum(spacing) <= 0:
-            spacing_dirname = configs.get('native_images_dir')
-        elif len(spacing) == 1:
-            spacing_dirname = configs.get('subsampled_images_dir_prefix') + str(spacing[0]) + 'mm'
-        else:
-            spacing_str = ''
-            for s in spacing:
-                spacing_str += str(s) + '-'
-            spacing_str = spacing_str[:-1]
-            spacing_dirname = configs.get('subsampled_images_dir_prefix') + spacing_str + 'mm'
-
-        return spacing_dirname
+        return get_spacing_dirname(spacing)
 
     def get_imagetype_path(self, images_type,
                            crop_suffix='_crop',
