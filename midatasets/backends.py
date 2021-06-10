@@ -1,6 +1,7 @@
 import logging
 import os
 from pathlib import Path
+from typing import Callable, Union
 
 import boto3
 
@@ -130,3 +131,13 @@ class LocalStorageBackend(StorageBackend):
             return grouped_files(files, ext, dataset_path=dataset_path)
         else:
             return files
+
+
+BACKENDS = {'s3': S3Backend, 'local': LocalStorageBackend}
+
+
+def get_backend(name: Union[str, Callable]) -> Callable:
+    if callable(name):
+        return name
+    else:
+        return BACKENDS[name]

@@ -5,7 +5,7 @@ from __future__ import print_function
 import os
 from pathlib import Path
 from random import sample
-from typing import Optional, List, Callable
+from typing import Optional, List, Callable, Union
 
 import SimpleITK as sitk
 import numpy as np
@@ -15,7 +15,7 @@ from joblib import Parallel, delayed
 import midatasets.preprocessing
 import midatasets.visualise as vis
 from midatasets import configs
-from midatasets.backends import LocalStorageBackend, S3Backend
+from midatasets.backends import LocalStorageBackend, S3Backend, get_backend
 from midatasets.preprocessing import sitk_resample, extract_vol_at_label
 from midatasets.utils import printProgressBar, get_spacing_dirname
 
@@ -44,7 +44,8 @@ class MIReader(object):
                  aws_profile: Optional[str] = None,
                  aws_s3_prefix: Optional[str] = None,
                  fail_on_error: bool = False,
-                 RemoteBackend: Optional[Callable] = S3Backend
+                 remote_backend: Union[Callable, str] = S3Backend,
+                 **kwargs
                  ):
 
         self.name = name
@@ -73,6 +74,7 @@ class MIReader(object):
         self.aws_dataset_name = self.aws_s3_prefix.replace(configs.get('root_s3_prefix'), '').replace('/', '')
         self.local_dataset_name = Path(self.dir_path).stem
         self.local_backend = LocalStorageBackend(root_path=self.get_root_path())
+        RemoteBackend = get_backend(remote_backend)
         self.remote_backend = RemoteBackend(bucket=aws_s3_bucket,
                                             prefix=configs.get('root_s3_prefix'),
                                             profile=aws_profile)
