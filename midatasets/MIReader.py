@@ -36,7 +36,6 @@ class MIReader(object):
                  subpath: Optional[str] = None,
                  ext: str = '.nii.gz',
                  label: Optional[str] = None,
-                 image_label: Optional[str] = None,
                  images_only: bool = False,
                  labels: Optional[List[str]] = None,
                  label_names: Optional[List[str]] = None,
@@ -44,7 +43,7 @@ class MIReader(object):
                  aws_profile: Optional[str] = None,
                  aws_s3_prefix: Optional[str] = None,
                  fail_on_error: bool = False,
-                 remote_backend: Union[Callable, str] = S3Backend,
+                 remote_backend: Optional[Union[Callable, str]] = S3Backend,
                  **kwargs
                  ):
 
@@ -63,21 +62,27 @@ class MIReader(object):
         self.ext = ext
         self.label = label
         self.image_type_dirs = set()
-        self.image_label = image_label
         self.images_only = images_only
         self.dataframe = pd.DataFrame()
         self.dataframe.index.name = 'name'
-        self.aws_s3_bucket = aws_s3_bucket
-        self.aws_profile = aws_profile
-        self.aws_s3_prefix = aws_s3_prefix
-        # in case local subdir is different from remote prefix
-        self.aws_dataset_name = self.aws_s3_prefix.replace(configs.get('root_s3_prefix'), '').replace('/', '')
         self.local_dataset_name = Path(self.dir_path).stem
-        self.local_backend = LocalStorageBackend(root_path=self.get_root_path())
-        RemoteBackend = get_backend(remote_backend)
-        self.remote_backend = RemoteBackend(bucket=aws_s3_bucket,
-                                            prefix=configs.get('root_s3_prefix'),
-                                            profile=aws_profile)
+        self.local_backend = LocalStorageBackend(root_path=str(Path(self.dir_path).parent))
+
+        if spacing is None:
+            raise Exception('spacing cannot be None')
+
+        if remote_backend:
+            self.aws_s3_bucket = aws_s3_bucket
+            self.aws_profile = aws_profile
+            self.aws_s3_prefix = aws_s3_prefix
+            # in case local subdir is different from remote prefix
+            if aws_s3_prefix:
+                self.aws_dataset_name = self.aws_s3_prefix.replace(configs.get('root_s3_prefix'), '').replace('/', '')
+
+            RemoteBackend = get_backend(remote_backend)
+            self.remote_backend = RemoteBackend(bucket=aws_s3_bucket,
+                                                prefix=configs.get('root_s3_prefix'),
+                                                profile=aws_profile)
         try:
             self.setup()
         except FileNotFoundError:
@@ -128,6 +133,7 @@ class MIReader(object):
             spacing=self.spacing,
             ext=self.ext,
             grouped=True)
+
         if not files:
             raise FileNotFoundError
         files = next(iter(files.values()))
@@ -141,9 +147,15 @@ class MIReader(object):
     def num_images(self):
         return len(self.image_list)
 
+    @property
+    def labelmap_key(self):
+        if self.label is None:
+            return 'labelmap'
+        else:
+            return f'labelmap-{self.label}'
+
     @classmethod
     def _load_image_from_disk(cls, img_path):
-        # return nib.load(img_path).get_data()
         img = sitk.ReadImage(img_path)
         return cls.get_array_from_sitk_image(img)
 
@@ -169,15 +181,15 @@ class MIReader(object):
 
     def get_labelmap_list(self, is_shuffled=False):
         if is_shuffled:
-            return list(self.dataframe['labelmap_path'].sample(frac=1).values)
+            return list(self.dataframe[f'{self.labelmap_key}_path'].sample(frac=1).values)
         else:
-            return list(self.dataframe['labelmap_path'].values)
+            return list(self.dataframe[f'{self.labelmap_key}_path'].values)
 
     def get_labelled_images_list(self, num=-1, is_shuffled=False):
 
         lst = []
-        for name, row in self.dataframe[['image_path', 'labelmap_path']].iterrows():
-            lst.append([row['image_path'], row['labelmap_path']])
+        for name, row in self.dataframe[['image_path', f'{self.labelmap_key}_path']].iterrows():
+            lst.append([row['image_path'], row[f'{self.labelmap_key}_path']])
 
         if is_shuffled:
             return sample(lst, num)
@@ -243,13 +255,13 @@ class MIReader(object):
 
     def load_labelmap(self, img_idx):
         if type(img_idx) is int:
-            labelmap_path = self.dataframe.iloc[img_idx]['labelmap_path']
+            labelmap_path = self.dataframe.iloc[img_idx][f'{self.labelmap_key}_path']
             return self._load_image_from_disk(labelmap_path)
         else:
             return self._load_labelmap_by_name(img_idx)
 
     def load_labelmap_and_resample(self, img_idx, new_spacing):
-        labelmap_path = self.dataframe.iloc[img_idx]['labelmap_path']
+        labelmap_path = self.dataframe.iloc[img_idx][f'{self.labelmap_key}_path']
         sitk_image = sitk.ReadImage(labelmap_path)
         sitk_image = sitk_resample(sitk_image, new_spacing, sitk.sitkNearestNeighbor)
 
@@ -260,7 +272,7 @@ class MIReader(object):
 
     def _load_labelmap_by_name(self, name):
         try:
-            path = self.dataframe.loc[name, 'labelmap_path']
+            path = self.dataframe.loc[name, f'{self.labelmap_key}_path']
         except:
             raise Exception(name + ' does not exist in dataset')
 
@@ -278,11 +290,11 @@ class MIReader(object):
         return sitk.ReadImage(image_path)
 
     def load_sitk_labelmap(self, img_idx):
-        labelmap_path = self.dataframe.iloc[img_idx]['labelmap_path']
+        labelmap_path = self.dataframe.iloc[img_idx][f'{self.labelmap_key}_path']
         return sitk.ReadImage(labelmap_path)
 
     def has_labelmap(self):
-        return 'labelmap_path' in self.dataframe.columns
+        return f'{self.labelmap_key}_path' in self.dataframe.columns
 
     def load_metadata(self, img_idx):
         image_path = self.dataframe.iloc[img_idx]['image_path']

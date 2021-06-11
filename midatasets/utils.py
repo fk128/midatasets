@@ -7,9 +7,11 @@ import numpy as np
 import pandas as pd
 import pydicom as dicom
 from skimage.draw import polygon
+import logging
 
 from midatasets import configs
 
+logger = logging.getLogger(__name__)
 
 def printProgressBar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█'):
     """
@@ -189,6 +191,8 @@ def export_train_test_split(reader, out_dir='.', type='csv', ratio=0.66, seed=42
 
 
 def get_spacing_dirname(spacing):
+    if spacing is None:
+        return None
     if type(spacing) in [int, float]:
         if isinstance(spacing, float) and spacing.is_integer():
             spacing = int(spacing)
@@ -221,12 +225,19 @@ def grouped_files(files_iter, ext, dataset_path, key='path'):
     for basefile_path in files_iter:
         file_path = basefile_path[key]
         prefix = str(Path(file_path).relative_to(dataset_path))
-        try:
+
+        if len(prefix.split('/')) == 3:
+            label = None
             image_type, spacing, filename = prefix.split('/')
-        except:
+        elif len(prefix.split('/')) == 4:
+            image_type, label, spacing, filename = prefix.split('/')
+        else:
+            logger.error(f'Failed to match pattern for grouping {prefix}')
             continue
+
         name = filename.replace(ext, '')
-        image_type = configs.get('remap_dirs', {}).get(image_type, image_type)
+        image_type_dir = configs.get('remap_dirs', {}).get(image_type, image_type)
+        image_key = f'{image_type_dir}-{label}' if label else image_type_dir
         if spacing not in files:
             files[spacing] = defaultdict(dict)
 
@@ -235,5 +246,5 @@ def grouped_files(files_iter, ext, dataset_path, key='path'):
                 name = existing_name
                 break
 
-        files[spacing][name][image_type] = {k: str(v) for k, v in basefile_path.items()}
+        files[spacing][name][image_key] = {k: str(v) for k, v in basefile_path.items()}
     return {k: dict(v) for k, v in files.items()}

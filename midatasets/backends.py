@@ -1,3 +1,4 @@
+import fnmatch
 import logging
 import os
 from pathlib import Path
@@ -56,19 +57,32 @@ class S3Backend(StorageBackend):
             raise
 
         image_types = [o.replace(src_prefix, '').replace('/', '') for o in image_type_prefixes]
-        image_types.remove(configs['images_dir'])
-        image_types = [configs['images_dir']] + image_types  # make sure images key is first
+        try:
+            image_types.remove(configs['images_dir'])
+            image_types = [configs['images_dir']] + image_types  # make sure images key is first
+        except:
+            logger.exception(f"Missing {configs['images_dir']} dir")
 
+        pattern = f'*/{get_spacing_dirname(spacing)}/*' if spacing else '*'
         files = []
         for image_type in image_types:
             prefix = Path(src_prefix)
             prefix = prefix / image_type
-            prefix = prefix if spacing is None else prefix / get_spacing_dirname(spacing)
             prefix = str(prefix)
-            result = self.client.list_objects(Bucket=self.bucket, Prefix=prefix).get('Contents', None)
-            if not result:
-                raise FileNotFoundError(f's3://{self.bucket}/{prefix} not found')
-            files += [{'path': r['Key']} for r in result]
+            paginator = self.client.get_paginator("list_objects_v2")
+            for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
+                result = page.get('Contents', None)
+                if not result:
+                    raise FileNotFoundError(f's3://{self.bucket}/{prefix} not found')
+                result = [r['Key'] for r in result]
+                # filter only matching spacing
+                if spacing is not None:
+                    result = fnmatch.filter(result, pattern)
+                files += [{'path': r} for r in result]
+
+        if len(files) == 0:
+            raise Exception(f'No files found at s3://{self.bucket}/{src_prefix}')
+
         if grouped:
             return grouped_files(files, ext, dataset_path=src_prefix)
         else:
@@ -87,6 +101,7 @@ class S3Backend(StorageBackend):
                 break
             count += 1
             for k, file_prefix in file_prefixes.items():
+                file_prefix = file_prefix['path']
                 target = os.path.join(dest_path, os.path.relpath(file_prefix, src_prefix))
                 if os.path.exists(target):
                     logger.info(f'[already exists] {target}')
@@ -115,16 +130,16 @@ class LocalStorageBackend(StorageBackend):
         image_types = list(image_type_paths.keys())
         try:
             image_types.remove(configs['images_dir'])
+            image_types = [configs['images_dir']] + image_types  # make sure images key is first
         except:
-            pass
-        image_types = [configs['images_dir']] + image_types  # make sure images key is first
+            logger.exception(f"Missing {configs['images_dir']} dir")
 
         files = []
         for image_type in image_types:
             prefix = dataset_path
             prefix = prefix / image_type
-            prefix = prefix if spacing is None else prefix / get_spacing_dirname(spacing)
-            files_iter = (dataset_path / prefix).rglob('*' + ext)
+            spacing_prefix = get_spacing_dirname(spacing) if spacing else ''
+            files_iter = (dataset_path / prefix).rglob(f'*/{spacing_prefix}/*' + ext)
             files += list(files_iter)
         files = [{'path': f} for f in files]
         if grouped:
