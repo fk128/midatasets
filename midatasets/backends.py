@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Callable, Union
 
 import boto3
-
 from midatasets import configs
 from midatasets.utils import get_spacing_dirname, grouped_files
 
@@ -63,7 +62,7 @@ class S3Backend(StorageBackend):
         except:
             logger.exception(f"Missing {configs['images_dir']} dir")
 
-        pattern = f'*/{get_spacing_dirname(spacing)}/*' if spacing else '*'
+        pattern = f'*/{get_spacing_dirname(spacing)}/*' if spacing is not None else '*'
         files = []
         for image_type in image_types:
             prefix = Path(src_prefix)
@@ -135,12 +134,18 @@ class LocalStorageBackend(StorageBackend):
             logger.exception(f"Missing {configs['images_dir']} dir")
 
         files = []
+        pattern = f'*/{get_spacing_dirname(spacing)}/*' if spacing is not None else '*'
         for image_type in image_types:
             prefix = dataset_path
             prefix = prefix / image_type
-            spacing_prefix = get_spacing_dirname(spacing) if spacing else ''
-            files_iter = (dataset_path / prefix).rglob(f'*/{spacing_prefix}/*' + ext)
-            files += list(files_iter)
+            files_iter = (dataset_path / prefix).rglob(f'*' + ext)
+            files_iter = [str(f) for f in files_iter]
+            # filter only matching spacing
+            if spacing is not None:
+                files_iter = fnmatch.filter(files_iter, pattern)
+
+            files += files_iter
+
         files = [{'path': f} for f in files]
         if grouped:
             return grouped_files(files, ext, dataset_path=dataset_path)
