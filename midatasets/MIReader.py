@@ -8,12 +8,11 @@ from random import sample
 from typing import Optional, List, Callable, Union
 
 import SimpleITK as sitk
+import midatasets.preprocessing
+import midatasets.visualise as vis
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
-
-import midatasets.preprocessing
-import midatasets.visualise as vis
 from midatasets import configs
 from midatasets.backends import LocalStorageBackend, S3Backend, get_backend
 from midatasets.preprocessing import sitk_resample, extract_vol_at_label
@@ -67,6 +66,7 @@ class MIReader(object):
         self.dataframe.index.name = 'name'
         self.local_dataset_name = Path(self.dir_path).stem
         self.local_backend = LocalStorageBackend(root_path=str(Path(self.dir_path).parent))
+        self.remote_dataframe = pd.DataFrame()
 
         if spacing is None:
             raise Exception('spacing cannot be None')
@@ -78,6 +78,8 @@ class MIReader(object):
             # in case local subdir is different from remote prefix
             if aws_s3_prefix:
                 self.aws_dataset_name = self.aws_s3_prefix.replace(configs.get('root_s3_prefix'), '').replace('/', '')
+            else:
+                self.aws_dataset_name = self.name
 
             RemoteBackend = get_backend(remote_backend)
             self.remote_backend = RemoteBackend(bucket=aws_s3_bucket,
@@ -110,6 +112,25 @@ class MIReader(object):
 
     def get_root_path(self):
         return configs.get('root_path')
+
+    def list_files(self, remote: bool = False, grouped: bool = True):
+        """
+        list files locally or remotely
+        :param remote:
+        :param grouped:
+        :return:
+        """
+        if remote:
+            return self.remote_backend.list_files(
+                dataset_name=self.aws_dataset_name if self.aws_dataset_name else self.name,
+                spacing=self.spacing,
+                ext=self.ext,
+                grouped=grouped)
+        else:
+            return self.local_backend.list_files(dataset_name=self.name,
+                                                 spacing=self.spacing,
+                                                 ext=self.ext,
+                                                 grouped=grouped)
 
     def download(self, max_images=None, dryrun=False):
         """
