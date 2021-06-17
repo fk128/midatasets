@@ -2,6 +2,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import logging
 import os
 from pathlib import Path
 from random import sample
@@ -17,6 +18,8 @@ from midatasets import configs
 from midatasets.backends import LocalStorageBackend, S3Backend, get_backend
 from midatasets.preprocessing import sitk_resample, extract_vol_at_label
 from midatasets.utils import printProgressBar, get_spacing_dirname
+
+logger = logging.getLogger(__name__)
 
 
 class MIReader(object):
@@ -91,7 +94,7 @@ class MIReader(object):
             if fail_on_error:
                 raise FileNotFoundError('No files found. try calling .download()')
             else:
-                print('No files found. try calling .download()')
+                logging.error('No files found. try calling .download()')
 
     @classmethod
     def from_dict(cls, **data):
@@ -396,7 +399,7 @@ class MIReader(object):
         if os.path.exists(path):
             slices = np.load(path)
         else:
-            print('{} does not exist. Extracting...'.format(path))
+            logger.info('{} does not exist. Extracting...'.format(path))
             self.export_2d_slices(self.dir_path, label)
             slices = np.load(path)
         return slices[configs.get('images_dir')], slices[configs.get('labelmaps_dir')]
@@ -423,16 +426,16 @@ class MIReader(object):
 
                 output_path = path.replace(self.get_spacing_dirname(), self.get_spacing_dirname(target_spacing))
                 if Path(output_path).exists() and not overwrite:
-                    print(
+                    logger.info(
                         f'[{image_type}/{self.get_spacing_dirname(target_spacing)}/{Path(output_path).name}] already exists')
                     continue
                 Path(output_path).parent.mkdir(exist_ok=True, parents=True)
                 sitk_image = sitk.ReadImage(path)
                 interpolation = sitk.sitkLinear if 'image' in image_type else sitk.sitkNearestNeighbor
                 interpolation_str = "sitk.sitkLinear" if 'image' in image_type else "sitk.sitkNearestNeighbor"
-                print(f'[{image_type}/{Path(output_path).name}] resampling from', sitk_image.GetSpacing(), 'to',
-                      target_spacing,
-                      f'using {interpolation_str}')
+                logger.info(
+                    f'[{image_type}/{Path(output_path).name}] resampling from {sitk_image.GetSpacing()} '
+                    f'to {target_spacing} using {interpolation_str}')
                 sitk_image = sitk_resample(sitk_image, spacing, interpolation=interpolation)
                 sitk.WriteImage(sitk_image, output_path)
 
@@ -451,7 +454,7 @@ class MIReader(object):
             return output_image, name_suffix
 
         name = self.get_image_name(i)
-        print(name)
+        logger.info(name)
         output_image, image_name_suffix = get_output(configs.get('images_crop_prefix'))
         output_labelmap, labelmap_name_suffix = get_output(configs.get('labelmaps_crop_prefix'))
 
