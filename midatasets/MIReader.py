@@ -58,6 +58,8 @@ class MIReader(object):
         self.labels = labels
         self.label_names = label_names
         self.do_preprocessing = False
+        if spacing is None:
+            raise Exception('Spacing cannot be None')
         self.spacing = spacing
         self.is_cropped = is_cropped
         self.crop_size = crop_size
@@ -225,14 +227,13 @@ class MIReader(object):
 
     def get_imagetype_path(self, images_type,
                            crop_suffix='_crop',
-                           spacing=None,
                            split=False):
 
         suffix = ''
         if self.is_cropped:
             suffix += crop_suffix + '_' + str(self.crop_size)
 
-        subpath = os.path.join(images_type + suffix, self.get_spacing_dirname(spacing=spacing))
+        subpath = os.path.join(images_type + suffix, self.get_spacing_dirname(spacing=self.spacing))
 
         if split:
             return self.dir_path.split(self.subpath)[0], self.subpath, subpath
