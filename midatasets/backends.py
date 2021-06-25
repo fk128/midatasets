@@ -2,9 +2,10 @@ import fnmatch
 import logging
 import os
 from pathlib import Path
-from typing import Callable, Union
+from typing import Callable, Union, Optional, Tuple
 
 import boto3
+
 from midatasets import configs
 from midatasets.utils import get_spacing_dirname, grouped_files
 
@@ -18,10 +19,15 @@ class StorageBackend:
     def list_datasets(self):
         raise NotImplementedError
 
-    def list_files(self, dataset_name, spacing=None, ext='.nii.gz', grouped=False):
+    def list_files(self, dataset_name: str, spacing: Optional[float] = None, ext: str = '.nii.gz',
+                   grouped: bool = False):
         raise NotImplementedError
 
-    def download(self, src_prefix, dest_path, spacing=0, max_images=None, ext='.nii.gz', dryrun=False):
+    def download(self, src_prefix: str, dest_path: str,
+                 spacing: Optional[float] = 0,
+                 max_images: Optional[int] = None,
+                 ext: str = '.nii.gz', dryrun: bool = False,
+                 include: Optional[Tuple[str, ...]] = None):
         raise NotImplementedError
 
 
@@ -87,7 +93,12 @@ class S3Backend(StorageBackend):
         else:
             return files
 
-    def download(self, dataset_name, dest_root_path, spacing=0, max_images=None, ext='.nii.gz', dryrun=False):
+    def download(self, dataset_name, dest_root_path,
+                 spacing=0,
+                 max_images=None,
+                 ext='.nii.gz',
+                 dryrun=False,
+                 include=None):
         src_prefix = str(Path(self.prefix) / dataset_name) + '/'
         dest_path = Path(dest_root_path) / dataset_name
         s3 = boto3.resource('s3')
@@ -100,6 +111,8 @@ class S3Backend(StorageBackend):
                 break
             count += 1
             for k, file_prefix in file_prefixes.items():
+                if include and k not in include:
+                    continue
                 file_prefix = file_prefix['path']
                 target = os.path.join(dest_path, os.path.relpath(file_prefix, src_prefix))
                 if os.path.exists(target):
