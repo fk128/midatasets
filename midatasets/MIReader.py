@@ -137,7 +137,7 @@ class MIReader(object):
                                                  ext=self.ext,
                                                  grouped=grouped)
 
-    def download(self, max_images=None, dryrun=False):
+    def download(self, max_images=None, dryrun=False, include=None, **kwargs):
         """
         download images using remote backend
         :param max_images:
@@ -148,7 +148,8 @@ class MIReader(object):
             dataset_name=self.aws_dataset_name,
             dest_root_path=self.get_root_path(),
             spacing=self.spacing, ext=self.ext,
-            dryrun=dryrun, max_images=max_images)
+            include=include,
+            dryrun=dryrun, max_images=max_images, **kwargs)
         self.setup()
 
     def setup(self):
