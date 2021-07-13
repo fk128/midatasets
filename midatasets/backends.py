@@ -86,21 +86,21 @@ class S3Backend(StorageBackend):
                 files += [{'path': r} for r in result]
 
         if len(files) == 0:
-            raise Exception(f'No files found at s3://{self.bucket}/{src_prefix}')
+            raise Exception(f'No files found at s3://{self.bucket}/{src_prefix} at spacing {spacing}')
 
         if grouped:
             return grouped_files(files, ext, dataset_path=src_prefix)
         else:
             return files
 
-    def download(self, dataset_name, dest_root_path,
+    def download(self, dataset_name, dest_path,
                  spacing=0,
                  max_images=None,
                  ext='.nii.gz',
                  dryrun=False,
                  include=None):
         src_prefix = str(Path(self.prefix) / dataset_name) + '/'
-        dest_path = Path(dest_root_path) / dataset_name
+        dest_path = Path(dest_path)
         s3 = boto3.resource('s3')
         bucket = s3.Bucket(self.bucket)
         files = self.list_files(dataset_name=dataset_name, spacing=spacing, ext=ext, grouped=True)

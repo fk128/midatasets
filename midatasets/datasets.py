@@ -23,7 +23,7 @@ def get_dataset_info(name):
         return match[0]
 
 
-def load_dataset(name, **kwargs):
+def load_dataset(name, **kwargs) -> MIReader:
     dataset = get_dataset_info(name)
     dataset['dir_path'] = os.path.join(configs.get('root_path'), dataset['subpath'])
     dataset.update(kwargs)
