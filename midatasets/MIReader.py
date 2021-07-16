@@ -422,15 +422,16 @@ class MIReader(object):
     def generate_resampled(self, spacing, parallel=True, num_workers=-1, image_types=None, overwrite=False):
 
         def resample(paths, target_spacing):
+
             for k, path in paths.items():
                 image_type = k.replace('_path', '')
                 if 'path' not in k or (image_types and image_type not in image_types):
                     continue
 
-                output_path = path.replace(self.get_spacing_dirname(), self.get_spacing_dirname(target_spacing))
+                output_path = path.replace(get_spacing_dirname(0), get_spacing_dirname(target_spacing))
                 if Path(output_path).exists() and not overwrite:
                     logger.info(
-                        f'[{image_type}/{self.get_spacing_dirname(target_spacing)}/{Path(output_path).name}] already exists')
+                        f'[{image_type}/{get_spacing_dirname(target_spacing)}/{Path(output_path).name}] already exists')
                     continue
                 Path(output_path).parent.mkdir(exist_ok=True, parents=True)
                 sitk_image = sitk.ReadImage(path)
