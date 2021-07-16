@@ -422,24 +422,27 @@ class MIReader(object):
         def resample(paths, target_spacing):
 
             for k, path in paths.items():
-                image_type = k.replace('_path', '')
-                if 'path' not in k or (image_types and image_type not in image_types):
-                    continue
+                try:
+                    image_type = k.replace('_path', '')
+                    if 'path' not in k or (image_types and image_type not in image_types):
+                        continue
 
-                output_path = path.replace(get_spacing_dirname(0), get_spacing_dirname(target_spacing))
-                if Path(output_path).exists() and not overwrite:
+                    output_path = path.replace(get_spacing_dirname(0), get_spacing_dirname(target_spacing))
+                    if Path(output_path).exists() and not overwrite:
+                        logger.info(
+                            f'[{image_type}/{get_spacing_dirname(target_spacing)}/{Path(output_path).name}] already exists')
+                        continue
+                    Path(output_path).parent.mkdir(exist_ok=True, parents=True)
+                    sitk_image = sitk.ReadImage(path)
+                    interpolation = sitk.sitkLinear if 'image' in image_type else sitk.sitkNearestNeighbor
+                    interpolation_str = "sitk.sitkLinear" if 'image' in image_type else "sitk.sitkNearestNeighbor"
                     logger.info(
-                        f'[{image_type}/{get_spacing_dirname(target_spacing)}/{Path(output_path).name}] already exists')
-                    continue
-                Path(output_path).parent.mkdir(exist_ok=True, parents=True)
-                sitk_image = sitk.ReadImage(path)
-                interpolation = sitk.sitkLinear if 'image' in image_type else sitk.sitkNearestNeighbor
-                interpolation_str = "sitk.sitkLinear" if 'image' in image_type else "sitk.sitkNearestNeighbor"
-                logger.info(
-                    f'[{image_type}/{Path(output_path).name}] resampling from {sitk_image.GetSpacing()} '
-                    f'to {target_spacing} using {interpolation_str}')
-                sitk_image = sitk_resample(sitk_image, spacing, interpolation=interpolation)
-                sitk.WriteImage(sitk_image, output_path)
+                        f'[{image_type}/{Path(output_path).name}] resampling from {sitk_image.GetSpacing()} '
+                        f'to {target_spacing} using {interpolation_str}')
+                    sitk_image = sitk_resample(sitk_image, spacing, interpolation=interpolation)
+                    sitk.WriteImage(sitk_image, output_path)
+                except:
+                    logger.exception(f'{k}: {path}')
 
         if parallel:
             Parallel(n_jobs=num_workers)(delayed(resample)(paths, spacing) for paths in self)
