@@ -9,18 +9,16 @@ from random import sample
 from typing import Optional, List, Callable, Union
 
 import SimpleITK as sitk
+import midatasets.preprocessing
+import midatasets.visualise as vis
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
-
-import midatasets.preprocessing
-import midatasets.visualise as vis
+from loguru import logger
 from midatasets import configs
 from midatasets.backends import LocalStorageBackend, S3Backend, get_backend
 from midatasets.preprocessing import sitk_resample, extract_vol_at_label
 from midatasets.utils import printProgressBar, get_spacing_dirname
-
-logger = logging.getLogger(__name__)
 
 
 class MIReader(object):
