@@ -9,6 +9,8 @@ from random import sample
 from typing import Optional, List, Callable, Union
 
 import SimpleITK as sitk
+import yaml
+
 import midatasets.preprocessing
 import midatasets.visualise as vis
 import numpy as np
@@ -70,7 +72,11 @@ class MIReader(object):
         self.dataframe.index.name = 'name'
         self.local_dataset_name = Path(self.dir_path).stem
         self.local_backend = LocalStorageBackend(root_path=str(Path(self.dir_path).parent))
-        self.remote_dataframe = pd.DataFrame()
+
+        metadata = self.load_metadata_from_file()
+        if metadata:
+            self.__dict__.update(metadata)
+            logger.info('Overrode parameters using local dataset.yaml')
 
         if spacing is None:
             raise Exception('spacing cannot be None')
@@ -116,6 +122,14 @@ class MIReader(object):
 
     def get_root_path(self):
         return configs.get('root_path')
+
+    def load_metadata_from_file(self, filename='dataset.yaml'):
+        metadata_path = Path(self.dir_path) / filename
+        if metadata_path.exists():
+            with metadata_path.open('r') as f:
+                metadata = yaml.safe_load(f)
+            return metadata
+        return None
 
     def list_files(self, remote: bool = False, grouped: bool = True):
         """
@@ -168,6 +182,27 @@ class MIReader(object):
 
         self.dataframe = pd.DataFrame.from_dict(files, orient='index')
         self.dataframe.dropna(inplace=True, subset=['image_path'])
+
+    def remote_diff(self, spacing=None):
+        if spacing is None:
+            spacing = self.spacing
+        local_files =  self.local_backend.list_files(
+            dataset_name=self.local_dataset_name,
+            spacing=spacing,
+            ext=self.ext,
+            grouped=True)
+        local_files = next(iter(local_files.values()))
+        remote_files = self.remote_backend.list_files(
+            dataset_name=self.aws_dataset_name,
+            spacing=spacing,
+            ext=self.ext,
+            grouped=True)
+        remote_files = next(iter(remote_files.values()))
+        logger.info(f'local: {len(local_files)}  remote: {len(remote_files)}')
+        if any([k not in local_files for k in remote_files.keys()]):
+            return True
+        else:
+            return False
 
     @property
     def num_images(self):
