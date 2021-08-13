@@ -241,10 +241,13 @@ def grouped_files(files_iter, ext, dataset_path, key='path'):
         if spacing not in files:
             files[spacing] = defaultdict(dict)
 
-        for existing_name in files[spacing].keys():
-            if existing_name in name:  # check if subset of existing name
-                name = existing_name
-                break
+        if image_type != 'images':
+            longest_name = ''
+            for existing_name in files[spacing].keys():
+                if existing_name in name and len(existing_name) > len(longest_name):  # check if subset of existing name
+                    longest_name = existing_name
+            if len(longest_name) > 0:
+                name = longest_name
 
         files[spacing][name][image_key] = {k: str(v) for k, v in basefile_path.items()}
     return {k: dict(v) for k, v in files.items()}
