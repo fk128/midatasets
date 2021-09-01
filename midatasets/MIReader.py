@@ -181,7 +181,10 @@ class MIReader(object):
             files[name] = {f'{k}_path': v['path'] for k, v in images.items()}
 
         self.dataframe = pd.DataFrame.from_dict(files, orient='index')
-        self.dataframe.dropna(inplace=True, subset=['image_path'])
+        try:
+            self.dataframe.dropna(inplace=True, subset=['image_path'])
+        except:
+            pass
 
     def remote_diff(self, spacing=None):
         if spacing is None:
