@@ -9,14 +9,14 @@ from random import sample
 from typing import Optional, List, Callable, Union
 
 import SimpleITK as sitk
+import numpy as np
+import pandas as pd
 import yaml
+from joblib import Parallel, delayed
+from loguru import logger
 
 import midatasets.preprocessing
 import midatasets.visualise as vis
-import numpy as np
-import pandas as pd
-from joblib import Parallel, delayed
-from loguru import logger
 from midatasets import configs
 from midatasets.backends import LocalStorageBackend, S3Backend, get_backend
 from midatasets.preprocessing import sitk_resample, extract_vol_at_label
@@ -32,7 +32,7 @@ class MIReader(object):
 
     def __init__(self,
                  spacing,
-                 name='reader',
+                 name: str = 'reader',
                  is_cropped: bool = False,
                  crop_size: int = 64,
                  dir_path: Optional[str] = None,
@@ -46,6 +46,7 @@ class MIReader(object):
                  aws_profile: Optional[str] = None,
                  aws_s3_prefix: Optional[str] = None,
                  fail_on_error: bool = False,
+                 dropna: bool = True,
                  remote_backend: Optional[Union[Callable, str]] = S3Backend,
                  **kwargs
                  ):
@@ -65,7 +66,9 @@ class MIReader(object):
         self.is_cropped = is_cropped
         self.crop_size = crop_size
         self.ext = ext
+        self.dropna = dropna
         self.label = label
+        self.image_key = 'image'
         self.image_type_dirs = set()
         self.images_only = images_only
         self.dataframe = pd.DataFrame()
@@ -182,14 +185,15 @@ class MIReader(object):
 
         self.dataframe = pd.DataFrame.from_dict(files, orient='index')
         try:
-            self.dataframe.dropna(inplace=True, subset=['image_path'])
+            if self.dropna:
+                self.dataframe.dropna(inplace=True, subset=[f'{self.image_key}_path'])
         except:
             pass
 
     def remote_diff(self, spacing=None):
         if spacing is None:
             spacing = self.spacing
-        local_files =  self.local_backend.list_files(
+        local_files = self.local_backend.list_files(
             dataset_name=self.local_dataset_name,
             spacing=spacing,
             ext=self.ext,
@@ -239,9 +243,9 @@ class MIReader(object):
 
     def get_image_list(self, is_shuffled=False):
         if is_shuffled:
-            return list(self.dataframe['image_path'].sample(frac=1).values)
+            return list(self.dataframe[f'{self.image_key}_path'].sample(frac=1).values)
         else:
-            return list(self.dataframe['image_path'].values)
+            return list(self.dataframe[f'{self.image_key}_path'].values)
 
     def get_labelmap_list(self, is_shuffled=False):
         if is_shuffled:
@@ -252,8 +256,8 @@ class MIReader(object):
     def get_labelled_images_list(self, num=-1, is_shuffled=False):
 
         lst = []
-        for name, row in self.dataframe[['image_path', f'{self.labelmap_key}_path']].iterrows():
-            lst.append([row['image_path'], row[f'{self.labelmap_key}_path']])
+        for name, row in self.dataframe[[f'{self.image_key}_path', f'{self.labelmap_key}_path']].iterrows():
+            lst.append([row[f'{self.image_key}_path'], row[f'{self.labelmap_key}_path']])
 
         if is_shuffled:
             return sample(lst, num)
@@ -287,7 +291,7 @@ class MIReader(object):
     def load_image(self, img_idx):
 
         if type(img_idx) is int:
-            image_path = self.dataframe.iloc[img_idx]['image_path']
+            image_path = self.dataframe.iloc[img_idx][f'{self.image_key}_path']
             if self.do_preprocessing:
                 return self._preprocess(self._load_image_from_disk(image_path))
             else:
@@ -296,7 +300,7 @@ class MIReader(object):
             return self._load_image_by_name(img_idx)
 
     def load_image_and_resample(self, img_idx, new_spacing):
-        image_path = self.dataframe.iloc[img_idx]['image_path']
+        image_path = self.dataframe.iloc[img_idx][f'{self.image_key}_path']
         sitk_image = sitk.ReadImage(image_path)
         sitk_image = sitk_resample(sitk_image, new_spacing)
 
@@ -307,7 +311,7 @@ class MIReader(object):
 
     def _load_image_by_name(self, name):
         try:
-            path = self.dataframe.loc[name, 'image_path']
+            path = self.dataframe.loc[name, f'{self.image_key}_path']
         except:
             raise Exception(name + ' does not exist in dataset')
 
@@ -349,7 +353,7 @@ class MIReader(object):
         return self._load_image_from_disk(path)
 
     def load_sitk_image(self, img_idx):
-        image_path = self.dataframe.iloc[img_idx]['image_path']
+        image_path = self.dataframe.iloc[img_idx][f'{self.image_key}_path']
         return sitk.ReadImage(image_path)
 
     def load_sitk_labelmap(self, img_idx):
@@ -360,7 +364,7 @@ class MIReader(object):
         return f'{self.labelmap_key}_path' in self.dataframe.columns
 
     def load_metadata(self, img_idx):
-        image_path = self.dataframe.iloc[img_idx]['image_path']
+        image_path = self.dataframe.iloc[img_idx][f'{self.image_key}_path']
         reader = sitk.ImageFileReader()
 
         reader.SetFileName(image_path)
