@@ -1,11 +1,12 @@
 import os
 from typing import Optional, Dict, Union
 
+from loguru import logger
 from midatasets import configs
 from midatasets.MIReader import MIReader
 from midatasets.databases import MIDatasetDBBase, MIDatasetDBTypes, MIDatasetModel
 
-_midatasetdb = None
+_midataset_store = None
 
 
 def get_db(db: Optional[Union[MIDatasetDBBase, str]] = None) -> MIDatasetDBBase:
@@ -17,7 +18,7 @@ def get_db(db: Optional[Union[MIDatasetDBBase, str]] = None) -> MIDatasetDBBase:
         return MIDatasetDBTypes[configs.get("database", "yaml")].value()
 
 
-class MIDatasets:
+class MIDatasetStore:
     def __init__(self, db: Optional[Union[MIDatasetDBBase, str]] = None):
         self._db: MIDatasetDBBase = get_db(db)
 
@@ -35,7 +36,12 @@ class MIDatasets:
         return self._db.create(item=dataset)
 
     def delete(self, name: str):
-        return self._db.delete({"name": name})
+        res = self._db.delete({"name": name})
+        if res > 0:
+            logger.info(f"deleted {name}")
+        else:
+            logger.error(f"{name} not found for deletion")
+        return res
 
     def update(self, name: str, dataset: MIDatasetModel):
         return self._db.update(selector={"name": name}, item=dataset)
@@ -49,15 +55,20 @@ class MIDatasets:
         return MIReader.from_dict(**dataset)
 
 
-def get_midatasetdb():
-    global _midatasetdb
-    if _midatasetdb is None:
-        _midatasetdb = MIDatasets()
-    return _midatasetdb
+def get_midataset_store():
+    global _midataset_store
+    if _midataset_store is None:
+        _midataset_store = MIDatasetStore()
+    return _midataset_store
+
+
+def set_midataset_store(db):
+    global _midataset_store
+    _midataset_store = db
 
 
 def _load_dataset_from_db(name, **kwargs) -> MIReader:
-    dataset = get_midatasetdb().get_info(name)
+    dataset = get_midataset_store().get_info(name)
     dataset["dir_path"] = os.path.join(
         configs.get("root_path"), dataset.get("subpath", None) or dataset["name"]
     )

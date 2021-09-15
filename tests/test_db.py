@@ -6,12 +6,22 @@ from midatasets.databases import (
     MIDatasetModel,
     CompositeDB, MIDatasetDBBaseMongoDb,
 )
-from midatasets.datasets import MIDatasets
+from midatasets.datasets import MIDatasetStore
 
 
 def test_datasets(tmp_path):
     os.environ['MIDATASETS_YAML_PATH'] = f"{tmp_path}/midatasets.yaml"
-    datasets = MIDatasets(db="yaml")
+    datasets = MIDatasetStore(db="yaml")
+    datasets.create(
+        MIDatasetModel(name="foo", aws_s3_prefix="bar", aws_s3_bucket="f")
+    )
+    assert len(datasets.get_info_all()) == 1
+
+
+
+def test_datasets_composite(tmp_path):
+    os.environ['MIDATASETS_YAML_PATH'] = f"{tmp_path}/midatasets.yaml"
+    datasets = MIDatasetStore(db="yaml")
     datasets.create(
         MIDatasetModel(name="foo", aws_s3_prefix="bar", aws_s3_bucket="f")
     )
