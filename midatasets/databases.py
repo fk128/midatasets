@@ -3,10 +3,12 @@ import os
 from enum import Enum
 from typing import Optional, Dict, List
 
+import boto3
 import yaml
+from botocore.exceptions import ClientError
 from bson import ObjectId
 from loguru import logger
-from pydantic import BaseModel, Field, BaseSettings
+from pydantic import BaseModel, BaseSettings
 from pymongo import MongoClient
 from smart_open import smart_open
 
@@ -68,11 +70,11 @@ class MIDatasetDBBaseMongoDb(MIDatasetDBBase):
             env_prefix = "midatasets_mongo_"
 
     def __init__(
-        self,
-        host: str = None,
-        db_name: str = None,
-        collection_name: str = None,
-        primary_key: str = None,
+            self,
+            host: str = None,
+            db_name: str = None,
+            collection_name: str = None,
+            primary_key: str = None,
     ):
         config = self.Config()
         self.db_name = db_name or config.db_name
@@ -105,10 +107,10 @@ class MIDatasetDBBaseMongoDb(MIDatasetDBBase):
 
 class MIDatasetDBDict(MIDatasetDBBase):
     def __init__(
-        self,
-        data: Optional[Dict] = None,
-        collection_name: str = "datasets",
-        primary_key: str = "name",
+            self,
+            data: Optional[Dict] = None,
+            collection_name: str = "datasets",
+            primary_key: str = "name",
     ):
         super().__init__()
         self.collection_name = collection_name
@@ -211,10 +213,10 @@ class MIDatasetDBBaseYaml(MIDatasetDBDict):
             env_prefix = "midatasets_yaml_"
 
     def __init__(
-        self,
-        path: Optional[str] = None,
-        collection_name: Optional[str] = None,
-        primary_key: Optional[str] = None,
+            self,
+            path: Optional[str] = None,
+            collection_name: Optional[str] = None,
+            primary_key: Optional[str] = None,
     ):
 
         config = self.Config()
@@ -238,7 +240,61 @@ class MIDatasetDBBaseYaml(MIDatasetDBDict):
             yaml.dump(self.data, f, default_flow_style=False, sort_keys=False)
 
 
+class MIDatasetDBDynamoDB(MIDatasetDBBase):
+    class Config(BaseSettings):
+        table_name: str = "datasets"
+        primary_key: str = "name"
+
+        class Config:
+            env_prefix = "midatasets_dynamodb_"
+
+    def __init__(
+            self,
+            table_name: str = None,
+            primary_key: str = None,
+    ):
+        config = self.Config()
+        self.table_name = table_name or config.table_name
+        self.primary_key = primary_key or config.primary_key
+        self.client = boto3.resource("dynamodb")
+        self.table = self.client.Table(self.table_name)
+
+    def find_all(self, selector: Optional[Dict] = None):
+        response = self.table.scan()
+        data = response["Items"]
+
+        while "LastEvaluatedKey" in response:
+            response = self.table.scan(ExclusiveStartKey=response["LastEvaluatedKey"])
+            data.extend(response["Items"])
+
+        if selector:
+            return [d for d in data if all([d[k] == v for k, v in selector.items()])]
+
+        return data
+
+    def find(self, selector: Dict):
+        try:
+            response = self.table.get_item(Key=selector)
+        except ClientError as e:
+            print(e.response["Error"]["Message"])
+        else:
+            return response["Item"]
+
+    def create(self, item: BaseModel):
+        response = self.table.put_item(Item=json.loads(item.json()))
+        return response
+
+    def update(self, selector: Dict, item: BaseModel):
+        # using put instead of update
+        self.create(item)
+
+    def delete(self, selector: Dict):
+        response = self.table.delete_item(Key=selector)
+        return response
+
+
 class MIDatasetDBTypes(MIDatasetDBBase, Enum):
     composite = CompositeDB
     yaml = MIDatasetDBBaseYaml
     mongo = MIDatasetDBBaseMongoDb
+    dynamodb = MIDatasetDBDynamoDB

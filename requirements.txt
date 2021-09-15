@@ -12,3 +12,4 @@ joblib>=1.0.1
 bumpversion>=0.6.0
 loguru
 pydantic
+pymongo
