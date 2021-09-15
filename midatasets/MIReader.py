@@ -1,23 +1,17 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import logging
 import os
 from pathlib import Path
-from random import sample
-from typing import Optional, List, Callable, Union
+from typing import Optional, List, Callable, Union, Tuple, Dict
 
 import SimpleITK as sitk
+import midatasets.preprocessing
+import midatasets.visualise as vis
 import numpy as np
 import pandas as pd
 import yaml
 from joblib import Parallel, delayed
 from loguru import logger
-
-import midatasets.preprocessing
-import midatasets.visualise as vis
-from midatasets import configs
+from midatasets import get_configs
 from midatasets.backends import LocalStorageBackend, S3Backend, get_backend
 from midatasets.preprocessing import sitk_resample, extract_vol_at_label
 from midatasets.utils import printProgressBar, get_spacing_dirname
@@ -26,7 +20,7 @@ from midatasets.utils import printProgressBar, get_spacing_dirname
 class MIReader(object):
     """Medical Image Reader
 
-    A class to interface with locally stored medical image dataset in nifti format
+    A class to interface with locally stored medical image dataset
 
     """
 
@@ -54,9 +48,6 @@ class MIReader(object):
         self.name = name
         self.dir_path = dir_path
         self.subpath = subpath
-        self.image_list = []
-        self.labelmap_list = []
-        self.boundingboxmap_list = []
         self.labels = labels
         self.label_names = label_names
         self.do_preprocessing = False
@@ -90,13 +81,14 @@ class MIReader(object):
             self.aws_s3_prefix = aws_s3_prefix
             # in case local subdir is different from remote prefix
             if aws_s3_prefix:
-                self.aws_dataset_name = self.aws_s3_prefix.replace(configs.get('root_s3_prefix'), '').replace('/', '')
+                self.aws_dataset_name = self.aws_s3_prefix.replace(get_configs().get('root_s3_prefix'), '').replace('/',
+                                                                                                                    '')
             else:
                 self.aws_dataset_name = self.name
 
             RemoteBackend = get_backend(remote_backend)
             self.remote_backend = RemoteBackend(bucket=aws_s3_bucket,
-                                                prefix=configs.get('root_s3_prefix'),
+                                                prefix=get_configs().get('root_s3_prefix'),
                                                 profile=aws_profile)
         try:
             self.setup()
@@ -124,9 +116,9 @@ class MIReader(object):
         return len(self.dataframe)
 
     def get_root_path(self):
-        return configs.get('root_path')
+        return get_configs().get('root_path')
 
-    def load_metadata_from_file(self, filename='dataset.yaml'):
+    def load_metadata_from_file(self, filename: str = 'dataset.yaml'):
         metadata_path = Path(self.dir_path) / filename
         if metadata_path.exists():
             with metadata_path.open('r') as f:
@@ -153,9 +145,10 @@ class MIReader(object):
                                                  ext=self.ext,
                                                  grouped=grouped)
 
-    def download(self, max_images=None, dryrun=False, include=None, **kwargs):
+    def download(self, max_images: Optional[int] = None, dryrun: bool = False, include: Optional[str] = None, **kwargs):
         """
         download images using remote backend
+        :param include:
         :param max_images:
         :param dryrun:
         :return:
@@ -190,7 +183,7 @@ class MIReader(object):
         except:
             pass
 
-    def remote_diff(self, spacing=None):
+    def remote_diff(self, spacing: Optional[Tuple] = None):
         if spacing is None:
             spacing = self.spacing
         local_files = self.local_backend.list_files(
@@ -212,10 +205,6 @@ class MIReader(object):
             return False
 
     @property
-    def num_images(self):
-        return len(self.image_list)
-
-    @property
     def labelmap_key(self):
         if self.label is None:
             return 'labelmap'
@@ -223,7 +212,7 @@ class MIReader(object):
             return f'labelmap-{self.label}'
 
     @classmethod
-    def _load_image_from_disk(cls, img_path):
+    def _load_image(cls, img_path):
         img = sitk.ReadImage(img_path)
         return cls.get_array_from_sitk_image(img)
 
@@ -241,34 +230,18 @@ class MIReader(object):
     def _preprocess(self, image):
         raise NotImplementedError()
 
-    def get_image_list(self, is_shuffled=False):
+    def get_image_list(self, key: Optional[str] = None, is_shuffled: bool = False):
+        key = key or self.image_key
         if is_shuffled:
-            return list(self.dataframe[f'{self.image_key}_path'].sample(frac=1).values)
+            return list(self.dataframe[f'{key}_path'].sample(frac=1).values)
         else:
-            return list(self.dataframe[f'{self.image_key}_path'].values)
+            return list(self.dataframe[f'{key}_path'].values)
 
-    def get_labelmap_list(self, is_shuffled=False):
-        if is_shuffled:
-            return list(self.dataframe[f'{self.labelmap_key}_path'].sample(frac=1).values)
-        else:
-            return list(self.dataframe[f'{self.labelmap_key}_path'].values)
-
-    def get_labelled_images_list(self, num=-1, is_shuffled=False):
-
-        lst = []
-        for name, row in self.dataframe[[f'{self.image_key}_path', f'{self.labelmap_key}_path']].iterrows():
-            lst.append([row[f'{self.image_key}_path'], row[f'{self.labelmap_key}_path']])
-
-        if is_shuffled:
-            return sample(lst, num)
-        else:
-            return lst[0:num]
-
-    def get_spacing_dirname(self, spacing=None):
+    def get_spacing_dirname(self, spacing: Optional[Union[int, float]] = None) -> str:
         return get_spacing_dirname(spacing)
 
-    def get_imagetype_path(self, images_type,
-                           crop_suffix='_crop',
+    def get_imagetype_path(self, images_type: str,
+                           crop_suffix: str = '_crop',
                            split=False):
 
         suffix = ''
@@ -282,60 +255,65 @@ class MIReader(object):
         else:
             return os.path.join(self.dir_path, subpath)
 
-    def get_image_name(self, img_idx):
-        return self.dataframe.index[img_idx]
+    def get_image_name(self, img_idx: int):
+        return self.dataframe.index[img_idx: int]
+
+    def get_image_path(self, img_idx: int, key: Optional[str] = None):
+        key = key or self.image_key
+        return self.dataframe.iloc[img_idx][f'{key}_path']
 
     def get_image_names(self):
         return list(self.dataframe.index)
 
-    def load_image(self, img_idx):
+    def load_image(self, img_idx: Union[str, int]):
 
         if type(img_idx) is int:
-            image_path = self.dataframe.iloc[img_idx][f'{self.image_key}_path']
+            image_path = self.get_image_path(img_idx)
             if self.do_preprocessing:
-                return self._preprocess(self._load_image_from_disk(image_path))
+                return self._preprocess(self._load_image(image_path))
             else:
-                return self._load_image_from_disk(image_path)
+                return self._load_image(image_path)
         else:
             return self._load_image_by_name(img_idx)
 
-    def load_image_and_resample(self, img_idx, new_spacing):
-        image_path = self.dataframe.iloc[img_idx][f'{self.image_key}_path']
+    def load_image_and_resample(self, img_idx: int,
+                                new_spacing: Union[int, float],
+                                key: Optional[str] = None,
+                                nearest: bool = False):
+        key = key or self.image_key
+        image_path = self.dataframe.iloc[img_idx][f'{key}_path']
         sitk_image = sitk.ReadImage(image_path)
-        sitk_image = sitk_resample(sitk_image, new_spacing)
+        sitk_image = sitk_resample(sitk_image, new_spacing,
+                                   interpolation=sitk.sitkNearestNeighbor if nearest else sitk.sitkLinear)
 
         x = int(sitk_image.GetDirection()[0])
         y = int(sitk_image.GetDirection()[4])
         z = int(sitk_image.GetDirection()[8])
         return sitk.GetArrayFromImage(sitk_image)[::x, ::y, ::z]
 
-    def _load_image_by_name(self, name):
+    def _load_image_by_name(self, name: str):
         try:
             path = self.dataframe.loc[name, f'{self.image_key}_path']
         except:
             raise Exception(name + ' does not exist in dataset')
 
         if self.do_preprocessing:
-            return self._preprocess(self._load_image_from_disk(path))
+            return self._preprocess(self._load_image(path))
         else:
-            return self._load_image_from_disk(path)
+            return self._load_image(path)
 
     def load_labelmap(self, img_idx):
         if type(img_idx) is int:
             labelmap_path = self.dataframe.iloc[img_idx][f'{self.labelmap_key}_path']
-            return self._load_image_from_disk(labelmap_path)
+            return self._load_image(labelmap_path)
         else:
             return self._load_labelmap_by_name(img_idx)
 
     def load_labelmap_and_resample(self, img_idx, new_spacing):
-        labelmap_path = self.dataframe.iloc[img_idx][f'{self.labelmap_key}_path']
-        sitk_image = sitk.ReadImage(labelmap_path)
-        sitk_image = sitk_resample(sitk_image, new_spacing, sitk.sitkNearestNeighbor)
-
-        x = int(sitk_image.GetDirection()[0])
-        y = int(sitk_image.GetDirection()[4])
-        z = int(sitk_image.GetDirection()[8])
-        return sitk.GetArrayFromImage(sitk_image)[::x, ::y, ::z]
+        return self.load_image_and_resample(img_idx=img_idx,
+                                            new_spacing=new_spacing,
+                                            key=self.labelmap_key,
+                                            nearest=True)
 
     def _load_labelmap_by_name(self, name):
         try:
@@ -344,13 +322,9 @@ class MIReader(object):
             raise Exception(name + ' does not exist in dataset')
 
         if self.do_preprocessing:
-            return self._preprocess(self._load_image_from_disk(path))
+            return self._preprocess(self._load_image(path))
         else:
-            return self._load_image_from_disk(path)
-
-    def load_boundingboxmap(self, img_idx):
-        path = self.dataframe.iloc[img_idx]['boundingbox_path']
-        return self._load_image_from_disk(path)
+            return self._load_image(path)
 
     def load_sitk_image(self, img_idx):
         image_path = self.dataframe.iloc[img_idx][f'{self.image_key}_path']
@@ -385,7 +359,7 @@ class MIReader(object):
                                                                      example_size=subvol_size,
                                                                      n_examples=num)
 
-    def extract_random_class_balanced_subvolume(self, img_idx, subvol_size=(64, 64, 64), num=2, class_weights=[1, 1]):
+    def extract_random_class_balanced_subvolume(self, img_idx, subvol_size=(64, 64, 64), num=2, class_weights=(1, 1)):
 
         return midatasets.preprocessing.extract_class_balanced_example_array(self.load_image(img_idx),
                                                                              self.load_labelmap(img_idx),
@@ -413,8 +387,8 @@ class MIReader(object):
         if out_path is None:
             out_path = self.dir_path
 
-        for img_idx in range(self.num_images):
-            printProgressBar(img_idx, self.num_images - 1, prefix='Progress:', suffix='Complete', length=50)
+        for img_idx in range(len(self)):
+            printProgressBar(img_idx, len(self) - 1, prefix='Progress:', suffix='Complete', length=50)
             name = self.get_image_name(img_idx)
             (images, labelmaps) = self.extract_all_slices(img_idx, label=label, step=step)
             allimages += images
@@ -445,19 +419,10 @@ class MIReader(object):
             logger.info('{} does not exist. Extracting...'.format(path))
             self.export_2d_slices(self.dir_path, label)
             slices = np.load(path)
-        return slices[configs.get('images_dir')], slices[configs.get('labelmaps_dir')]
+        return slices
 
     def prune_image_list(self, keep_image_names):
-        image_list = list(self.image_list)
-        labelmap_list = list(self.labelmap_list)
-        for image, labelmap in zip(self.image_list, self.labelmap_list):
-            img_name = os.path.basename(image.replace('.nii.gz', ''))
-            if img_name not in keep_image_names:
-                image_list.remove(image)
-                labelmap_list.remove(labelmap)
-
-        self.image_list = image_list
-        self.labelmap_list = labelmap_list
+        pass
 
     def generate_resampled(self, spacing, parallel=True, num_workers=-1, image_types=None, overwrite=False):
 
@@ -502,8 +467,8 @@ class MIReader(object):
 
         name = self.get_image_name(i)
         logger.info(name)
-        output_image, image_name_suffix = get_output(configs.get('images_crop_prefix'))
-        output_labelmap, labelmap_name_suffix = get_output(configs.get('labelmaps_crop_prefix'))
+        output_image, image_name_suffix = get_output(get_configs().get('images_crop_prefix'))
+        output_labelmap, labelmap_name_suffix = get_output(get_configs().get('labelmaps_crop_prefix'))
 
         lmap = self.load_labelmap(i)
         if label is not None:
@@ -535,29 +500,29 @@ class MIReader(object):
     def extract_crops(self, vol_size=(64, 64, 64), label=None, parallel=False):
 
         if not parallel:
-            for i in range(self.num_images):
-                printProgressBar(i + 1, self.num_images)
+            for i in range(len(self)):
+                printProgressBar(i + 1, len(self))
                 self.extract_crop(i, label, vol_size)
 
         else:
             from joblib import Parallel, delayed
-            Parallel(n_jobs=6)(delayed(self.extract_crop)(i, label, vol_size) for i in range(self.num_images))
+            Parallel(n_jobs=6)(delayed(self.extract_crop)(i, label, vol_size) for i in range(len(self)))
 
     def load_image_crop(self, img_idx, vol_size=(64, 64, 64), label=1):
         name = self.get_image_name(img_idx)
-        name_suffix = configs.get('images_crop_prefix') + str(vol_size[0])
+        name_suffix = get_configs().get('images_crop_prefix') + str(vol_size[0])
         output = self.get_imagetype_path(name_suffix)
         path = os.path.join(output, name + '_' + str(label) + '_' + name_suffix
                             + '.nii.gz')
-        return self._load_image_from_disk(path)
+        return self._load_image(path)
 
     def load_labelmap_crop(self, img_idx, vol_size=(64, 64, 64), label=1):
         name = self.get_image_name(img_idx)
-        name_suffix = configs.get('labelmaps_crop_prefix') + str(vol_size[0])
+        name_suffix = get_configs().get('labelmaps_crop_prefix') + str(vol_size[0])
         output = self.get_imagetype_path(name_suffix)
         path = os.path.join(output, name + '_' + str(label) + '_' + name_suffix
                             + '.nii.gz')
-        return self._load_image_from_disk(path)
+        return self._load_image(path)
 
     def view_slices(self, img_idx, label=None, step=3, dim=0):
         if label is None:
