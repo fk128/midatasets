@@ -46,6 +46,13 @@ class MIDatasetStore:
     def update(self, name: str, dataset: MIDatasetModel):
         return self._db.update(selector={"name": name}, item=dataset)
 
+    def get_local_path(self, name: str):
+        dataset = self.get_info(name)
+        path = os.path.join(
+            configs.get("root_path"), dataset.get("subpath", None) or dataset["name"]
+        )
+        return os.path.expandvars(path)
+
     def load(self, name: str, **kwargs) -> MIReader:
         dataset = self.get_info(name)
         dataset["dir_path"] = os.path.join(
