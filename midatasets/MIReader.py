@@ -1,7 +1,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import Optional, List, Callable, Union, Tuple
+from typing import Optional, List, Callable, Union, Tuple, Dict
 
 import SimpleITK as sitk
 import midatasets.preprocessing
@@ -31,12 +31,10 @@ class MIReader(object):
         is_cropped: bool = False,
         crop_size: int = 64,
         dir_path: Optional[str] = None,
-        subpath: Optional[str] = None,
         ext: str = ".nii.gz",
         label: Optional[str] = None,
         images_only: bool = False,
-        labels: Optional[List[str]] = None,
-        label_names: Optional[List[str]] = None,
+        label_mappings: Optional[Dict[str, Dict]] = None,
         aws_s3_bucket: Optional[str] = None,
         aws_profile: Optional[str] = None,
         aws_s3_prefix: Optional[str] = None,
@@ -46,11 +44,9 @@ class MIReader(object):
         **kwargs,
     ):
 
+        self.label_mappings = label_mappings
         self.name = name
-        self.dir_path = dir_path
-        self.subpath = subpath
-        self.labels = labels
-        self.label_names = label_names
+        self.dir_path = os.path.expandvars(dir_path)
         self.do_preprocessing = False
         if spacing is None:
             raise Exception("Spacing cannot be None")
@@ -235,6 +231,13 @@ class MIReader(object):
         else:
             return f"labelmap-{self.label}"
 
+    @property
+    def label_mapping(self):
+        if self.label_mappings is None:
+            return {}
+        else:
+            return self.label_mappings.get(self.labelmap_key, {})
+
     @classmethod
     def _load_image(cls, img_path):
         img = sitk.ReadImage(img_path)
@@ -277,7 +280,7 @@ class MIReader(object):
         )
 
         if split:
-            return self.dir_path.split(self.subpath)[0], self.subpath, subpath
+            return self.dir_path.split(self.name)[0], self.name, subpath
         else:
             return os.path.join(self.dir_path, subpath)
 

@@ -32,7 +32,7 @@ class PyObjectId(ObjectId):
 class MIDatasetModel(BaseModel):
     # id: Optional[PyObjectId] = Field(alias="_id")
     name: str
-    labels: Optional[List]
+    label_mappings: Optional[Dict]
     aws_s3_bucket: str
     aws_s3_prefix: str
 
@@ -193,10 +193,12 @@ class CompositeDB(MIDatasetDBBase):
         return result
 
     def create(self, item: BaseModel):
-        raise NotImplementedError("Ambiguous composite for create")
+        logger.info(f'Created using {self.dbs[0].__class__}')
+        return self.dbs[0].create(item)
 
     def update(self, selector, item: BaseModel):
-        raise NotImplementedError("Ambiguous composite for update")
+        logger.info(f'Updated using {self.dbs[0].__class__}')
+        return self.dbs[0].update(selector, item)
 
 
 def delete(self, selector):
