@@ -200,9 +200,9 @@ class CompositeDB(MIDatasetDBBase):
         logger.info(f'Updated using {self.dbs[0].__class__}')
         return self.dbs[0].update(selector, item)
 
-
-def delete(self, selector):
-    return self.collection.delete_one(selector).deleted_count
+    def delete(self, selector):
+        logger.info(f'Deleted using {self.dbs[0].__class__}')
+        return self.dbs[0].delete(selector)
 
 
 class MIDatasetDBBaseYaml(MIDatasetDBDict):
