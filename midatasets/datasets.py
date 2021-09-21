@@ -5,6 +5,7 @@ from loguru import logger
 from midatasets import configs
 from midatasets.MIReader import MIReader
 from midatasets.databases import MIDatasetDBBase, MIDatasetDBTypes, MIDatasetModel
+from midatasets.storage_backends import DatasetS3Backend, DatasetLocalBackend
 
 _midataset_store = None
 
@@ -32,8 +33,13 @@ class MIDatasetStore:
     def get_info(self, name: str):
         return self._db.find(selector={"name": name})
 
-    def get_dataset_files(self, name):
-        self.get_info(name)
+    def get_storage_backend(self, name, remote: bool = False):
+        info = self.get_info(name)
+        # TODO: make this more generic
+        if remote:
+            return DatasetS3Backend(prefix=info['aws_s3_prefix'], bucket=info['aws_s3_bucket'])
+        else:
+            return DatasetLocalBackend(root_path=f"{os.path.expandvars(configs.get('root_path'))}/{name}")
 
     def create(self, dataset: MIDatasetModel):
         return self._db.create(item=dataset)
