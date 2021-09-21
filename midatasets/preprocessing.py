@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import math
+from typing import Optional
 
 import SimpleITK as sitk
 import numpy as np
@@ -137,7 +138,10 @@ def sitk_resample(sitk_image, min_spacing, interpolation=sitk.sitkLinear):
     return resampleSliceFilter.Execute(sitk_image)
 
 
-def extract_alldims_mid_slices_at_label(image, labelmap, label=None, offset=0, is_tight=False):
+def extract_alldims_mid_slices_at_label(image, labelmap: Optional[np.ndarray] = None, label: Optional[str] = None,
+                                        offset=0, is_tight=False):
+    if labelmap is None or label is None:
+        label = None
     if label is not None:
         slices = ndimage.find_objects(labelmap == label)[0]
     else:
@@ -148,7 +152,6 @@ def extract_alldims_mid_slices_at_label(image, labelmap, label=None, offset=0, i
     labelmaps = []
     mids = []
     for i in range(3):
-
         mid = math.floor((slices[i].start + slices[i].stop) / 2) + offset
         mids.append(mid)
         slicesc = list(slices)
@@ -159,8 +162,10 @@ def extract_alldims_mid_slices_at_label(image, labelmap, label=None, offset=0, i
         images.append(image[slicesc[0], slicesc[1], slicesc[2]])
         if label is not None:
             labelmaps.append(labelmap[slicesc[0], slicesc[1], slicesc[2]])
-
-    return (images, labelmaps)
+    if label:
+        return (images, labelmaps)
+    else:
+        return (images,)
 
 
 def extract_vol_at_label(image, labelmap, label=None, vol_size=[32, 32, 32], offset=[0, 0, 0], is_rand=False):
