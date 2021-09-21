@@ -3,6 +3,7 @@ from pathlib import Path
 import boto3
 from midatasets import storage_backends
 from midatasets.MIReader import MIReader
+from midatasets.utils import get_spacing_dirname
 from moto import mock_s3
 
 
@@ -121,5 +122,9 @@ def test_s3_backend_sublabel(tmpdir):
 
         backend = storage_backends.DatasetS3Backend(bucket="mybucket", prefix=f"datasets/{dataset_name}")
         dest_path = f"{tmpdir}/datasets/{dataset_name}"
-        backend.download(dest_path=dest_path)
-        assert len(list(Path(dest_path).rglob("*.gz"))) == 4 * 10
+        for spacing in [0, 1]:
+            spacing_dir = get_spacing_dirname(spacing)
+            backend.download(dest_path=dest_path)
+            assert len(list(Path(dest_path).rglob(f"{spacing_dir}/*.gz"))) == 4 * 10
+            backend.download(dest_path=dest_path, spacing=1)
+        assert len(list(Path(dest_path).rglob(f"{spacing_dir}/*.gz"))) == 4 * 10
