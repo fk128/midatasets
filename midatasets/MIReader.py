@@ -1,7 +1,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import Optional, List, Callable, Union, Tuple, Dict
+from typing import Optional, Callable, Union, Tuple, Dict
 
 import SimpleITK as sitk
 import midatasets.preprocessing
@@ -12,7 +12,7 @@ import yaml
 from joblib import Parallel, delayed
 from loguru import logger
 from midatasets import get_configs
-from midatasets.backends import LocalStorageBackend, S3Backend, get_backend
+from midatasets.storage_backends import DatasetLocalBackend, DatasetS3Backend, get_backend
 from midatasets.preprocessing import sitk_resample, extract_vol_at_label
 from midatasets.utils import printProgressBar, get_spacing_dirname
 
@@ -25,23 +25,24 @@ class MIReader(object):
     """
 
     def __init__(
-        self,
-        spacing,
-        name: str = "reader",
-        is_cropped: bool = False,
-        crop_size: int = 64,
-        dir_path: Optional[str] = None,
-        ext: str = ".nii.gz",
-        label: Optional[str] = None,
-        images_only: bool = False,
-        label_mappings: Optional[Dict[str, Dict]] = None,
-        aws_s3_bucket: Optional[str] = None,
-        aws_profile: Optional[str] = None,
-        aws_s3_prefix: Optional[str] = None,
-        fail_on_error: bool = False,
-        dropna: bool = True,
-        remote_backend: Optional[Union[Callable, str]] = S3Backend,
-        **kwargs,
+            self,
+            spacing,
+            name: str = "reader",
+            is_cropped: bool = False,
+            crop_size: int = 64,
+            dir_path: Optional[str] = None,
+            ext: str = (".nii.gz",),
+            label: Optional[str] = None,
+            images_only: bool = False,
+            label_mappings: Optional[Dict[str, Dict]] = None,
+            remote_bucket: Optional[str] = None,
+            remote_profile: Optional[str] = None,
+            remote_prefix: Optional[str] = None,
+            remote_backend: Optional[Union[Callable, str]] = DatasetS3Backend,
+            fail_on_error: bool = False,
+            dropna: bool = True,
+
+            **kwargs,
     ):
 
         self.label_mappings = label_mappings
@@ -62,8 +63,13 @@ class MIReader(object):
         self.dataframe = pd.DataFrame()
         self.dataframe.index.name = "name"
         self.local_dataset_name = Path(self.dir_path).stem
-        self.local_backend = LocalStorageBackend(
-            root_path=str(Path(self.dir_path).parent)
+        self.remote_bucket = remote_bucket
+        self.remote_profile = remote_profile
+        self.remote_prefix = remote_prefix
+        self._deprecated_check(**kwargs)
+
+        self.local_backend = DatasetLocalBackend(
+            root_path=self.dir_path
         )
 
         metadata = self.load_metadata_from_file()
@@ -75,23 +81,22 @@ class MIReader(object):
             raise Exception("spacing cannot be None")
 
         if remote_backend:
-            self.aws_s3_bucket = aws_s3_bucket
-            self.aws_profile = aws_profile
-            self.aws_s3_prefix = aws_s3_prefix
             # in case local subdir is different from remote prefix
-            if aws_s3_prefix:
-                self.aws_dataset_name = self.aws_s3_prefix.replace(
+            if self.remote_prefix:
+                self.remote_dataset_name = self.remote_prefix.replace(
                     get_configs().get("root_s3_prefix"), ""
                 ).replace("/", "")
             else:
-                self.aws_dataset_name = self.name
+                self.remote_dataset_name = self.name
 
             RemoteBackend = get_backend(remote_backend)
+
             self.remote_backend = RemoteBackend(
-                bucket=aws_s3_bucket,
-                prefix=get_configs().get("root_s3_prefix"),
-                profile=aws_profile,
+                bucket=self.remote_bucket,
+                prefix=self.remote_prefix,
+                profile=self.remote_profile,
             )
+
         try:
             self.setup()
         except FileNotFoundError:
@@ -103,6 +108,17 @@ class MIReader(object):
     @classmethod
     def from_dict(cls, **data):
         return cls(**data)
+
+    def _deprecated_check(self, **kwargs):
+        if 'aws_s3_prefix' in kwargs:
+            self.remote_prefix = kwargs.get('aws_s3_prefix')
+            logger.warning(f"replace deprecated argument aws_s3_prefix with remote_prefix")
+        if 'aws_s3_bucket' in kwargs:
+            self.remote_bucket = kwargs.get('aws_s3_bucket')
+            logger.warning(f"replace deprecated argument aws_s3_bucket with remote_bucket")
+        if 'aws_s3_profile' in kwargs:
+            self.remote_profile = kwargs.get('aws_s3_profile')
+            logger.warning(f"replace deprecated argument aws_s3_profile with remote_profile")
 
     def __getitem__(self, index):
         return dict(self.dataframe.reset_index().iloc[index])
@@ -137,27 +153,29 @@ class MIReader(object):
         """
         if remote:
             return self.remote_backend.list_files(
-                dataset_name=self.aws_dataset_name
-                if self.aws_dataset_name
-                else self.name,
                 spacing=self.spacing,
                 ext=self.ext,
                 grouped=grouped,
             )
         else:
             return self.local_backend.list_files(
-                dataset_name=self.name,
                 spacing=self.spacing,
                 ext=self.ext,
                 grouped=grouped,
             )
 
+    def list_image_types(self, remote: bool = False):
+        if remote:
+            return self.remote_backend.list_dirs()
+        else:
+            return self.local_backend.list_dirs()
+
     def download(
-        self,
-        max_images: Optional[int] = None,
-        dryrun: bool = False,
-        include: Optional[str] = None,
-        **kwargs,
+            self,
+            max_images: Optional[int] = None,
+            dryrun: bool = False,
+            include: Optional[str] = None,
+            **kwargs,
     ):
         """
         download images using remote backend
@@ -167,7 +185,6 @@ class MIReader(object):
         :return:
         """
         self.remote_backend.download(
-            dataset_name=self.aws_dataset_name,
             dest_path=self.dir_path,
             spacing=self.spacing,
             ext=self.ext,
@@ -182,7 +199,6 @@ class MIReader(object):
         if self.dir_path is None:
             return
         files = self.local_backend.list_files(
-            dataset_name=self.local_dataset_name,
             spacing=self.spacing,
             ext=self.ext,
             grouped=True,
@@ -205,14 +221,12 @@ class MIReader(object):
         if spacing is None:
             spacing = self.spacing
         local_files = self.local_backend.list_files(
-            dataset_name=self.local_dataset_name,
             spacing=spacing,
             ext=self.ext,
             grouped=True,
         )
         local_files = next(iter(local_files.values()))
         remote_files = self.remote_backend.list_files(
-            dataset_name=self.aws_dataset_name,
             spacing=spacing,
             ext=self.ext,
             grouped=True,
@@ -268,7 +282,7 @@ class MIReader(object):
         return get_spacing_dirname(spacing)
 
     def get_imagetype_path(
-        self, images_type: str, crop_suffix: str = "_crop", split=False
+            self, images_type: str, crop_suffix: str = "_crop", split=False
     ):
 
         suffix = ""
@@ -306,11 +320,11 @@ class MIReader(object):
             return self._load_image_by_name(img_idx)
 
     def load_image_and_resample(
-        self,
-        img_idx: int,
-        new_spacing: Union[int, float],
-        key: Optional[str] = None,
-        nearest: bool = False,
+            self,
+            img_idx: int,
+            new_spacing: Union[int, float],
+            key: Optional[str] = None,
+            nearest: bool = False,
     ):
         key = key or self.image_key
         image_path = self.dataframe.iloc[img_idx][f"{key}_path"]
@@ -398,7 +412,7 @@ class MIReader(object):
         )
 
     def extract_random_class_balanced_subvolume(
-        self, img_idx, subvol_size=(64, 64, 64), num=2, class_weights=(1, 1)
+            self, img_idx, subvol_size=(64, 64, 64), num=2, class_weights=(1, 1), num_labels=2,
     ):
 
         return midatasets.preprocessing.extract_class_balanced_example_array(
@@ -406,7 +420,7 @@ class MIReader(object):
             self.load_labelmap(img_idx),
             example_size=subvol_size,
             n_examples=num,
-            classes=len(self.labels),
+            classes=num_labels,
             class_weights=class_weights,
         )
 
@@ -487,7 +501,7 @@ class MIReader(object):
         pass
 
     def generate_resampled(
-        self, spacing, parallel=True, num_workers=-1, image_types=None, overwrite=False
+            self, spacing, parallel=True, num_workers=-1, image_types=None, overwrite=False
     ):
         def resample(paths, target_spacing):
 
@@ -495,7 +509,7 @@ class MIReader(object):
                 try:
                     image_type = k.replace("_path", "")
                     if "path" not in k or (
-                        image_types and image_type not in image_types
+                            image_types and image_type not in image_types
                     ):
                         continue
 

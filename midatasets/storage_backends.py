@@ -5,34 +5,35 @@ from pathlib import Path
 from typing import Callable, Union, Optional, Tuple
 
 import boto3
-
 from midatasets import configs
 from midatasets.utils import get_spacing_dirname, grouped_files
 
 logger = logging.getLogger(__name__)
 
 
-class StorageBackend:
+class DatasetStorageBackendBase:
+
     def __init__(self, *args, **kwargs):
         pass
 
-    def list_datasets(self):
+    def list_dirs(self, sub_path: Optional[str] = None):
         raise NotImplementedError
 
-    def list_files(self, dataset_name: str, spacing: Optional[float] = None, ext: str = '.nii.gz',
+    def list_files(self, spacing: Optional[Union[float, int]] = None, ext: Tuple[str] = ('.nii.gz',),
                    grouped: bool = False):
         raise NotImplementedError
 
-    def download(self, src_prefix: str, dest_path: str,
-                 spacing: Optional[float] = 0,
+    def download(self, dest_path: str,
+                 src_prefix: Optional[str] = None,
+                 spacing: Optional[Union[float, int]] = 0,
                  max_images: Optional[int] = None,
                  ext: str = '.nii.gz', dryrun: bool = False,
                  include: Optional[Tuple[str, ...]] = None):
         raise NotImplementedError
 
 
-class S3Backend(StorageBackend):
-    def __init__(self, bucket, prefix='/', profile=None):
+class DatasetS3Backend(DatasetStorageBackendBase):
+    def __init__(self, bucket: str, prefix: str, profile=None):
         super().__init__()
         self.bucket = bucket
         self.prefix = prefix
@@ -42,18 +43,18 @@ class S3Backend(StorageBackend):
         if 'AWS_SECRET_ACCESS_KEY' not in os.environ and 'AWS_ACCESS_KEY_ID' not in os.environ:
             boto3.setup_default_session(profile_name=self.profile)
 
-    def list_datasets(self):
-        """
-
-        :return: dict {dataset_name: prefix}
-        """
-        result = self.client.list_objects(Bucket=self.bucket, Prefix=self.prefix, Delimiter='/')
+    def list_dirs(self, sub_path: Optional[str] = None):
+        prefix = self.prefix if sub_path is None else os.path.join(self.prefix, sub_path)
+        prefix = prefix if prefix.endswith('/') else prefix + '/'
+        result = self.client.list_objects(Bucket=self.bucket, Prefix=prefix, Delimiter='/')
         return {o.get('Prefix').split('/')[-2]: o.get('Prefix') for o in result.get('CommonPrefixes')}
 
-    def list_files(self, dataset_name, spacing=None, ext='.nii.gz', grouped=False):
-        if dataset_name not in self.list_datasets().keys():
-            raise FileNotFoundError(f'`{dataset_name}` does not exist')
-        src_prefix = str(Path(self.prefix) / dataset_name) + '/'
+    def list_files(self, spacing: Optional[Union[float, int]] = None, ext: Union[Tuple[str], str] = ('.nii.gz',),
+                   grouped: bool = False):
+        if not isinstance(ext, tuple):
+            ext = (ext,)
+
+        src_prefix = str(Path(self.prefix)) + '/'
         result = self.client.list_objects(Bucket=self.bucket, Prefix=src_prefix, Delimiter='/')
         try:
             image_type_prefixes = [o.get('Prefix') for o in result.get('CommonPrefixes')]
@@ -93,17 +94,19 @@ class S3Backend(StorageBackend):
         else:
             return files
 
-    def download(self, dataset_name, dest_path,
-                 spacing=0,
+    def download(self, dest_path,
+                 src_prefix: Optional[str] = None,
+                 spacing: Optional[Union[float, int]] = 0,
                  max_images=None,
-                 ext='.nii.gz',
+                 ext: Tuple[str] = ('.nii.gz',),
                  dryrun=False,
                  include=None):
-        src_prefix = str(Path(self.prefix) / dataset_name) + '/'
+        if src_prefix is None:
+            src_prefix = str(Path(self.prefix)) + '/'
         dest_path = Path(dest_path)
         s3 = boto3.resource('s3')
         bucket = s3.Bucket(self.bucket)
-        files = self.list_files(dataset_name=dataset_name, spacing=spacing, ext=ext, grouped=True)
+        files = self.list_files(spacing=spacing, ext=ext, grouped=True)
         files = files[next(iter(files))]
         count = 0
         for name, file_prefixes in files.items():
@@ -126,19 +129,22 @@ class S3Backend(StorageBackend):
                     bucket.download_file(file_prefix, target)
 
 
-class LocalStorageBackend(StorageBackend):
+class DatasetLocalBackend(DatasetStorageBackendBase):
 
     def __init__(self, root_path):
         super().__init__()
         self.root_path = root_path
         self.image_type_dirs = set()
 
-    def list_datasets(self):
-        return {p.stem: p for p in Path(self.root_path).iterdir()}
+    def list_dirs(self, sub_path: Optional[str] = None):
+        path = self.root_path if sub_path is None else os.path.join(self.root_path, sub_path)
+        return {p.stem: p for p in Path(path).iterdir()}
 
-    def list_files(self, dataset_name, spacing=None, ext='.nii.gz', grouped=False):
-        dataset_path = Path(self.root_path) / dataset_name
-        image_type_paths = {image_type_path.name: image_type_path for image_type_path in dataset_path.iterdir()}
+    def list_files(self, spacing: Optional[Union[float, int]] = None, ext: Tuple[str] = ('.nii.gz',), grouped=False):
+        if not isinstance(ext, tuple):
+            ext = (ext,)
+        dataset_path = Path(self.root_path)
+        image_type_paths = self.list_dirs()
         image_types = list(image_type_paths.keys())
         try:
             image_types.remove(configs['images_dir'])
@@ -151,8 +157,8 @@ class LocalStorageBackend(StorageBackend):
         for image_type in image_types:
             prefix = dataset_path
             prefix = prefix / image_type
-            files_iter = (dataset_path / prefix).rglob(f'*' + ext)
-            files_iter = [str(f) for f in files_iter]
+            files_iter = [str(f) for e in ext for f in (dataset_path / prefix).rglob(f'*' + e)]
+
             # filter only matching spacing
             if spacing is not None:
                 files_iter = fnmatch.filter(files_iter, pattern)
@@ -166,10 +172,10 @@ class LocalStorageBackend(StorageBackend):
             return files
 
 
-BACKENDS = {'s3': S3Backend, 'local': LocalStorageBackend}
+BACKENDS = {'s3': DatasetS3Backend, 'local': DatasetLocalBackend}
 
 
-def get_backend(name: Union[str, Callable]) -> Callable:
+def get_backend(name: Union[str, Callable[..., DatasetStorageBackendBase]]) -> Callable[..., DatasetStorageBackendBase]:
     if callable(name):
         return name
     else:

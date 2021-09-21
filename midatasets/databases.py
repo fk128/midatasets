@@ -278,7 +278,7 @@ class MIDatasetDBDynamoDB(MIDatasetDBBase):
         try:
             response = self.table.get_item(Key=selector)
         except ClientError as e:
-            print(e.response["Error"]["Message"])
+            logger.error(e.response["Error"]["Message"])
         else:
             return response["Item"]
 

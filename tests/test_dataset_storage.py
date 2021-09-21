@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import boto3
-from midatasets import backends
+from midatasets import storage_backends
 from midatasets.MIReader import MIReader
 from moto import mock_s3
 
@@ -84,6 +84,7 @@ def test_s3_backend(tmpdir):
     conn.create_bucket(Bucket="mybucket")
     s3 = boto3.client("s3", region_name="us-east-1")
     datasets = {}
+
     for dataset_name in ["foo", "bar"]:
         datasets[dataset_name] = f"datasets/{dataset_name}/"
         for i in range(10):
@@ -91,13 +92,14 @@ def test_s3_backend(tmpdir):
             s3.put_object(Bucket="mybucket", Key=key, Body="")
             key = f"datasets/{dataset_name}/images/native/img_{i}.nii.gz"
             s3.put_object(Bucket="mybucket", Key=key, Body="")
+            key = f"datasets/{dataset_name}/preview/native/img_{i}.jpg"
+            s3.put_object(Bucket="mybucket", Key=key, Body="")
 
-    backend = backends.S3Backend(bucket="mybucket", prefix="datasets/")
-
-    assert datasets == backend.list_datasets()
-
-    backend.download("foo", tmpdir, max_images=10)
-    assert len(list(Path(str(tmpdir)).rglob("*.gz"))) == 2 * 10
+        backend = storage_backends.DatasetS3Backend(bucket="mybucket", prefix=f"datasets/{dataset_name}")
+        dest_path = f"{tmpdir}/datasets/{dataset_name}"
+        backend.download(dest_path=dest_path, max_images=10)
+        assert len(list(Path(dest_path).rglob("*.gz"))) == 2 * 10
+        assert len(list(Path(dest_path).rglob("*.jpg"))) == 1 * 10
 
 
 @mock_s3
@@ -117,8 +119,7 @@ def test_s3_backend_sublabel(tmpdir):
                 key = f"datasets/{dataset_name}/images/{spacing}/img_{i}.nii.gz"
                 s3.put_object(Bucket="mybucket", Key=key, Body="")
 
-    backend = backends.S3Backend(bucket="mybucket", prefix="datasets/")
-
-    assert datasets == backend.list_datasets()
-    backend.download("foo", f"{tmpdir}/foo", max_images=10)
-    assert len(list(Path(str(tmpdir)).rglob("*.gz"))) == 4 * 10
+        backend = storage_backends.DatasetS3Backend(bucket="mybucket", prefix=f"datasets/{dataset_name}")
+        dest_path = f"{tmpdir}/datasets/{dataset_name}"
+        backend.download(dest_path=dest_path)
+        assert len(list(Path(dest_path).rglob("*.gz"))) == 4 * 10

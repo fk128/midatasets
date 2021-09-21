@@ -32,6 +32,9 @@ class MIDatasetStore:
     def get_info(self, name: str):
         return self._db.find(selector={"name": name})
 
+    def get_dataset_files(self, name):
+        self.get_info(name)
+
     def create(self, dataset: MIDatasetModel):
         return self._db.create(item=dataset)
 
@@ -53,8 +56,9 @@ class MIDatasetStore:
         )
         return os.path.expandvars(path)
 
-    def load(self, name: str, **kwargs) -> MIReader:
+    def load(self, name: str, spacing=0, **kwargs) -> MIReader:
         dataset = self.get_info(name)
+        dataset["spacing"] = spacing
         dataset["dir_path"] = os.path.join(
             configs.get("root_path"), dataset.get("subpath", None) or dataset["name"]
         )
@@ -76,6 +80,9 @@ def set_midataset_store(db):
 
 def _load_dataset_from_db(name, **kwargs) -> MIReader:
     dataset = get_midataset_store().get_info(name)
+    if dataset is None:
+        raise Exception(f'Dataset {name} not found')
+
     dataset["dir_path"] = os.path.join(
         configs.get("root_path"), dataset.get("subpath", None) or dataset["name"]
     )
@@ -83,7 +90,7 @@ def _load_dataset_from_db(name, **kwargs) -> MIReader:
     return MIReader.from_dict(**dataset)
 
 
-def load_dataset(name, spacing, dataset_path=None, **kwargs) -> MIReader:
+def load_dataset(name, spacing=0, dataset_path=None, **kwargs) -> MIReader:
     if dataset_path:
         return MIReader(name=name, spacing=spacing, dir_path=dataset_path, **kwargs)
     else:

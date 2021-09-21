@@ -29,11 +29,11 @@ def test_datasets_composite(tmp_path):
 @pytest.mark.skip(msg="TODO: mock mongo")
 def test_mongodb():
     db = MIDatasetDBBaseMongoDb()
-    print(db.find_all())
+
 
 
 def test_yaml_crud(tmp_path):
-    db = MIDatasetDBBaseYaml(path=f"/{tmp_path}/midatasets.yaml")
+    db = MIDatasetDBBaseYaml(path=f"{tmp_path}/midatasets.yaml")
     m = MIDatasetModel(name="foo", aws_s3_bucket="v", aws_s3_prefix="s")
 
     db.create(m)
