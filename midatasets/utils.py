@@ -1,17 +1,17 @@
 import os
 from collections import defaultdict
 from pathlib import Path
+from typing import Tuple, List, Union, Iterable
 
 import SimpleITK as sitk
 import numpy as np
 import pandas as pd
 import pydicom as dicom
+from loguru import logger
 from skimage.draw import polygon
-import logging
 
 from midatasets import configs
 
-logger = logging.getLogger(__name__)
 
 def printProgressBar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█'):
     """
@@ -212,7 +212,8 @@ def get_spacing_dirname(spacing):
     return spacing_dirname
 
 
-def grouped_files(files_iter, ext, dataset_path, key='path'):
+def grouped_files(files_iter: Union[List, Iterable], ext: Tuple[str], dataset_path: Union[Path, str],
+                  key: str = 'path'):
     """
     group files by spacing/name/image_type
     :param files_iter:
@@ -221,6 +222,8 @@ def grouped_files(files_iter, ext, dataset_path, key='path'):
     :param key:
     :return:
     """
+    if not isinstance(ext, tuple):
+        ext = (ext,)
     files = defaultdict(dict)
     for basefile_path in files_iter:
         file_path = basefile_path[key]
@@ -235,7 +238,10 @@ def grouped_files(files_iter, ext, dataset_path, key='path'):
             logger.error(f'Failed to match pattern for grouping {prefix}')
             continue
 
-        name = filename.replace(ext, '')
+        name = filename
+        for e in ext:
+            if filename.endswith(e):
+                name = name.replace(e, '')
         image_type_dir = configs.get('remap_dirs', {}).get(image_type, image_type)
         image_key = f'{image_type_dir}-{label}' if label else image_type_dir
         if spacing not in files:
