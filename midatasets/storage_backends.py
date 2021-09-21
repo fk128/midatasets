@@ -1,14 +1,22 @@
 import fnmatch
 import logging
 import os
+import threading
 from pathlib import Path
-from typing import Callable, Union, Optional, Tuple
+from typing import Callable, Union, Optional, Tuple, List
 
 import boto3
 from midatasets import configs
 from midatasets.utils import get_spacing_dirname, grouped_files
 
 logger = logging.getLogger(__name__)
+
+
+def parse_image_type(image_type: str):
+    # TODO: Improve handling of image type
+    if image_type in configs['remap_dirs'].values():
+        return image_type + 's'
+    return image_type
 
 
 class DatasetStorageBackendBase:
@@ -19,9 +27,23 @@ class DatasetStorageBackendBase:
     def list_dirs(self, sub_path: Optional[str] = None):
         raise NotImplementedError
 
+    def list_files_at_dirs(self, sub_path: Optional[str] = None, pattern: Optional[str] = None):
+        raise NotImplementedError
+
     def list_files(self, spacing: Optional[Union[float, int]] = None, ext: Tuple[str] = ('.nii.gz',),
+                   image_types: Optional[List[str]] = None,
                    grouped: bool = False):
         raise NotImplementedError
+
+    def get_base_dir(self):
+        raise NotImplementedError
+
+    def get_image_types(self, image_types: Optional[List[str]] = None):
+        image_types = image_types or list(self.list_dirs().keys())
+        if configs['images_dir'] in image_types:
+            image_types.remove(configs['images_dir'])
+            image_types = [configs['images_dir']] + image_types  # make sure images key is first
+        return [parse_image_type(image_type) for image_type in image_types]
 
     def download(self, dest_path: str,
                  src_prefix: Optional[str] = None,
@@ -32,16 +54,28 @@ class DatasetStorageBackendBase:
         raise NotImplementedError
 
 
+boto3_client_lock = threading.Lock()
+
+
 class DatasetS3Backend(DatasetStorageBackendBase):
-    def __init__(self, bucket: str, prefix: str, profile=None):
+    def __init__(self, bucket: str, prefix: str, profile=None, **kwargs):
         super().__init__()
         self.bucket = bucket
         self.prefix = prefix
         self.profile = profile
-        self.client = boto3.client('s3')
+        self.client = self._create_client()
+        self.root_s3_path = f's3://{os.path.join(self.bucket, self.prefix)}'
 
         if 'AWS_SECRET_ACCESS_KEY' not in os.environ and 'AWS_ACCESS_KEY_ID' not in os.environ:
             boto3.setup_default_session(profile_name=self.profile)
+
+    def get_base_dir(self):
+        return str(self.root_s3_path)
+
+    @staticmethod
+    def _create_client():
+        with boto3_client_lock:
+            return boto3.client('s3')
 
     def list_dirs(self, sub_path: Optional[str] = None):
         prefix = self.prefix if sub_path is None else os.path.join(self.prefix, sub_path)
@@ -49,48 +83,44 @@ class DatasetS3Backend(DatasetStorageBackendBase):
         result = self.client.list_objects(Bucket=self.bucket, Prefix=prefix, Delimiter='/')
         return {o.get('Prefix').split('/')[-2]: o.get('Prefix') for o in result.get('CommonPrefixes')}
 
-    def list_files(self, spacing: Optional[Union[float, int]] = None, ext: Union[Tuple[str], str] = ('.nii.gz',),
+    def list_files_at_dirs(self, sub_path: Optional[str] = None, pattern: Optional[str] = None):
+        prefix = self.prefix
+        if sub_path:
+            prefix = os.path.join(self.prefix, sub_path)
+        if not prefix.endswith('/'):
+            prefix += '/'
+        paginator = self.client.get_paginator("list_objects_v2")
+        results = []
+        for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
+            result = page.get('Contents', None)
+            if result:
+                result = [r['Key'] for r in result]
+                if pattern:
+                    result = fnmatch.filter(result, pattern)
+                results += [{'path': f"s3://{self.bucket}/{r}"} for r in result]
+        return results
+
+    def list_files(self, spacing: Optional[Union[float, int]] = None,
+                   image_types: Optional[List[str]] = None,
+                   ext: Union[Tuple[str], str] = ('.nii.gz',),
                    grouped: bool = False):
         if not isinstance(ext, tuple):
             ext = (ext,)
 
         src_prefix = str(Path(self.prefix)) + '/'
-        result = self.client.list_objects(Bucket=self.bucket, Prefix=src_prefix, Delimiter='/')
-        try:
-            image_type_prefixes = [o.get('Prefix') for o in result.get('CommonPrefixes')]
-        except Exception as e:
-            logger.exception(e)
-            raise
 
-        image_types = [o.replace(src_prefix, '').replace('/', '') for o in image_type_prefixes]
-        try:
-            image_types.remove(configs['images_dir'])
-            image_types = [configs['images_dir']] + image_types  # make sure images key is first
-        except:
-            logger.exception(f"Missing {configs['images_dir']} dir")
+        image_types = self.get_image_types(image_types)
 
         pattern = f'*/{get_spacing_dirname(spacing)}/*' if spacing is not None else '*'
         files = []
         for image_type in image_types:
-            prefix = Path(src_prefix)
-            prefix = prefix / image_type
-            prefix = str(prefix)
-            paginator = self.client.get_paginator("list_objects_v2")
-            for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
-                result = page.get('Contents', None)
-                if not result:
-                    raise FileNotFoundError(f's3://{self.bucket}/{prefix} not found')
-                result = [r['Key'] for r in result]
-                # filter only matching spacing
-                if spacing is not None:
-                    result = fnmatch.filter(result, pattern)
-                files += [{'path': r} for r in result]
-
+            result = self.list_files_at_dirs(sub_path=image_type, pattern=pattern)
+            files.extend(result)
         if len(files) == 0:
             raise Exception(f'No files found at s3://{self.bucket}/{src_prefix} at spacing {spacing}')
 
         if grouped:
-            return grouped_files(files, ext, dataset_path=src_prefix)
+            return grouped_files(files, ext, dataset_path=f"{self.root_s3_path}")
         else:
             return files
 
@@ -109,14 +139,15 @@ class DatasetS3Backend(DatasetStorageBackendBase):
         files = self.list_files(spacing=spacing, ext=ext, grouped=True)
         files = files[next(iter(files))]
         count = 0
-        for name, file_prefixes in files.items():
+        for name, file_paths in files.items():
             if max_images and count >= max_images:
                 break
             count += 1
-            for k, file_prefix in file_prefixes.items():
+            for k, file_path in file_paths.items():
                 if include and k not in include:
                     continue
-                file_prefix = file_prefix['path']
+
+                file_prefix = file_path['path'].replace(f's3://{self.bucket}/', '')
                 target = os.path.join(dest_path, os.path.relpath(file_prefix, src_prefix))
                 if os.path.exists(target):
                     logger.info(f'[already exists] {target}')
@@ -131,26 +162,39 @@ class DatasetS3Backend(DatasetStorageBackendBase):
 
 class DatasetLocalBackend(DatasetStorageBackendBase):
 
-    def __init__(self, root_path):
+    def __init__(self, root_path=None, **kwargs):
         super().__init__()
-        self.root_path = root_path
+        self.root_path = root_path or kwargs.get('dir_path', None)
+        if self.root_path is None:
+            raise Exception('Missing root_path or dir_path')
         self.image_type_dirs = set()
 
     def list_dirs(self, sub_path: Optional[str] = None):
         path = self.root_path if sub_path is None else os.path.join(self.root_path, sub_path)
         return {p.stem: p for p in Path(path).iterdir()}
 
-    def list_files(self, spacing: Optional[Union[float, int]] = None, ext: Tuple[str] = ('.nii.gz',), grouped=False):
+    def get_base_dir(self):
+        return str(Path(self.root_path))
+
+    def list_files_at_dirs(self, sub_path: Optional[str] = None, pattern: Optional[str] = None):
+        path = Path(self.root_path)
+        if sub_path:
+            path /= sub_path
+
+        files = [str(f) for f in path.glob(f'*' )]
+        # filter only matching spacing
+        if pattern:
+            files = fnmatch.filter(files, pattern)
+
+        return [{'path': f} for f in files]
+
+    def list_files(self, spacing: Optional[Union[float, int]] = None, image_types: Optional[List[str]] = None,
+                   ext: Tuple[str] = ('.nii.gz',), grouped=False):
         if not isinstance(ext, tuple):
             ext = (ext,)
         dataset_path = Path(self.root_path)
-        image_type_paths = self.list_dirs()
-        image_types = list(image_type_paths.keys())
-        try:
-            image_types.remove(configs['images_dir'])
-            image_types = [configs['images_dir']] + image_types  # make sure images key is first
-        except:
-            logger.exception(f"Missing {configs['images_dir']} dir")
+
+        image_types = self.get_image_types(image_types)
 
         files = []
         pattern = f'*/{get_spacing_dirname(spacing)}/*' if spacing is not None else '*'
@@ -162,7 +206,6 @@ class DatasetLocalBackend(DatasetStorageBackendBase):
             # filter only matching spacing
             if spacing is not None:
                 files_iter = fnmatch.filter(files_iter, pattern)
-
             files += files_iter
 
         files = [{'path': f} for f in files]
