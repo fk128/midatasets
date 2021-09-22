@@ -1,11 +1,11 @@
 import fnmatch
 import logging
 import os
-import threading
 from pathlib import Path
 from typing import Callable, Union, Optional, Tuple, List
 
 import boto3
+import botocore
 from midatasets import configs
 from midatasets.utils import get_spacing_dirname, grouped_files
 
@@ -54,16 +54,18 @@ class DatasetStorageBackendBase:
         raise NotImplementedError
 
 
-boto3_client_lock = threading.Lock()
-
-
 class DatasetS3Backend(DatasetStorageBackendBase):
+    client = boto3.session.Session().client('s3',
+                                            config=botocore.config.Config(
+                                                retries={'max_attempts': 10, 'mode': 'standard'}))
+
     def __init__(self, bucket: str, prefix: str, profile=None, **kwargs):
         super().__init__()
         self.bucket = bucket
         self.prefix = prefix
         self.profile = profile
-        self.client = self._create_client()
+        self.client = kwargs.get('client', self.client)
+
         self.root_s3_path = f's3://{os.path.join(self.bucket, self.prefix)}'
 
         if 'AWS_SECRET_ACCESS_KEY' not in os.environ and 'AWS_ACCESS_KEY_ID' not in os.environ:
@@ -71,11 +73,6 @@ class DatasetS3Backend(DatasetStorageBackendBase):
 
     def get_base_dir(self):
         return str(self.root_s3_path)
-
-    @staticmethod
-    def _create_client():
-        with boto3_client_lock:
-            return boto3.client('s3')
 
     def list_dirs(self, sub_path: Optional[str] = None):
         prefix = self.prefix if sub_path is None else os.path.join(self.prefix, sub_path)
@@ -181,7 +178,7 @@ class DatasetLocalBackend(DatasetStorageBackendBase):
         if sub_path:
             path /= sub_path
 
-        files = [str(f) for f in path.glob(f'*' )]
+        files = [str(f) for f in path.glob(f'*')]
         # filter only matching spacing
         if pattern:
             files = fnmatch.filter(files, pattern)
