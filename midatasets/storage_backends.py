@@ -6,6 +6,7 @@ from typing import Callable, Union, Optional, Tuple, List
 
 import boto3
 import botocore
+
 from midatasets import configs
 from midatasets.utils import get_spacing_dirname, grouped_files
 
@@ -27,7 +28,8 @@ class DatasetStorageBackendBase:
     def list_dirs(self, sub_path: Optional[str] = None):
         raise NotImplementedError
 
-    def list_files_at_dirs(self, sub_path: Optional[str] = None, pattern: Optional[str] = None):
+    def list_files_at_dirs(self, sub_path: Optional[str] = None, pattern: Optional[str] = None,
+                           ext: Union[Tuple[str], str] = ('.nii.gz',)):
         raise NotImplementedError
 
     def list_files(self, spacing: Optional[Union[float, int]] = None, ext: Tuple[str] = ('.nii.gz',),
@@ -80,7 +82,8 @@ class DatasetS3Backend(DatasetStorageBackendBase):
         result = self.client.list_objects(Bucket=self.bucket, Prefix=prefix, Delimiter='/')
         return {o.get('Prefix').split('/')[-2]: o.get('Prefix') for o in result.get('CommonPrefixes')}
 
-    def list_files_at_dirs(self, sub_path: Optional[str] = None, pattern: Optional[str] = None):
+    def list_files_at_dirs(self, sub_path: Optional[str] = None, pattern: Optional[str] = None,
+                           ext: Union[Tuple[str], str] = ('.nii.gz',)):
         prefix = self.prefix
         if sub_path:
             prefix = os.path.join(self.prefix, sub_path)
@@ -94,7 +97,8 @@ class DatasetS3Backend(DatasetStorageBackendBase):
                 result = [r['Key'] for r in result]
                 if pattern:
                     result = fnmatch.filter(result, pattern)
-                results += [{'path': f"s3://{self.bucket}/{r}"} for r in result]
+                results += [{'path': f"s3://{self.bucket}/{r}", "image_type": sub_path} for r in result if
+                            r.endswith(ext)]
         return results
 
     def list_files(self, spacing: Optional[Union[float, int]] = None,
@@ -173,7 +177,8 @@ class DatasetLocalBackend(DatasetStorageBackendBase):
     def get_base_dir(self):
         return str(Path(self.root_path))
 
-    def list_files_at_dirs(self, sub_path: Optional[str] = None, pattern: Optional[str] = None):
+    def list_files_at_dirs(self, sub_path: Optional[str] = None, pattern: Optional[str] = None,
+                           ext: Union[Tuple[str], str] = ('.nii.gz',), ):
         path = Path(self.root_path)
         if sub_path:
             path /= sub_path
@@ -183,7 +188,7 @@ class DatasetLocalBackend(DatasetStorageBackendBase):
         if pattern:
             files = fnmatch.filter(files, pattern)
 
-        return [{'path': f} for f in files]
+        return [{'path': f} for f in files if f.endswith(ext)]
 
     def list_files(self, spacing: Optional[Union[float, int]] = None, image_types: Optional[List[str]] = None,
                    ext: Tuple[str] = ('.nii.gz',), grouped=False):
@@ -203,9 +208,8 @@ class DatasetLocalBackend(DatasetStorageBackendBase):
             # filter only matching spacing
             if spacing is not None:
                 files_iter = fnmatch.filter(files_iter, pattern)
-            files += files_iter
+            files += [{'path': f, 'image_type': image_type} for f in files_iter]
 
-        files = [{'path': f} for f in files]
         if grouped:
             return grouped_files(files, ext, dataset_path=dataset_path)
         else:
