@@ -108,8 +108,6 @@ class DatasetS3Backend(DatasetStorageBackendBase):
         if not isinstance(ext, tuple):
             ext = (ext,)
 
-        src_prefix = str(Path(self.prefix)) + '/'
-
         image_types = self.get_image_types(image_types)
 
         pattern = f'*/{get_spacing_dirname(spacing)}/*' if spacing is not None else '*'
@@ -117,8 +115,6 @@ class DatasetS3Backend(DatasetStorageBackendBase):
         for image_type in image_types:
             result = self.list_files_at_dirs(sub_path=image_type, pattern=pattern)
             files.extend(result)
-        if len(files) == 0:
-            raise Exception(f'No files found at s3://{self.bucket}/{src_prefix} at spacing {spacing}')
 
         if grouped:
             return grouped_files(files, ext, dataset_path=f"{self.root_s3_path}")
