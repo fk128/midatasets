@@ -4,25 +4,21 @@ from pathlib import Path
 from typing import Optional, Callable, Union, Tuple, Dict
 
 import SimpleITK as sitk
-import midatasets.preprocessing
-import midatasets.visualise as vis
 import numpy as np
 import pandas as pd
 import yaml
 from joblib import Parallel, delayed
 from loguru import logger
+
+import midatasets.preprocessing
+import midatasets.visualise as vis
 from midatasets import get_configs
-from midatasets.storage_backends import DatasetLocalBackend, DatasetS3Backend, get_backend
 from midatasets.preprocessing import sitk_resample, extract_vol_at_label
+from midatasets.storage_backends import DatasetLocalBackend, DatasetS3Backend, get_backend
 from midatasets.utils import printProgressBar, get_spacing_dirname
 
 
-class MIReader(object):
-    """Medical Image Reader
-
-    A class to interface with locally stored medical image dataset
-
-    """
+class MIReaderBase:
 
     def __init__(
             self,
@@ -252,25 +248,6 @@ class MIReader(object):
         else:
             return self.label_mappings.get(self.labelmap_key, {})
 
-    @classmethod
-    def _load_image(cls, img_path):
-        img = sitk.ReadImage(img_path)
-        return cls.get_array_from_sitk_image(img)
-
-    @classmethod
-    def get_array_from_sitk_image(cls, img):
-        def validate(v):
-            if v == 0:
-                return 1
-
-        x = validate(int(img.GetDirection()[0]))
-        y = validate(int(img.GetDirection()[4]))
-        z = validate(int(img.GetDirection()[8]))
-        return sitk.GetArrayFromImage(img)[::x, ::y, ::z]
-
-    def _preprocess(self, image):
-        raise NotImplementedError()
-
     def get_image_list(self, key: Optional[str] = None, is_shuffled: bool = False):
         key = key or self.image_key
         if is_shuffled:
@@ -307,6 +284,31 @@ class MIReader(object):
 
     def get_image_names(self):
         return list(self.dataframe.index)
+
+    def has_labelmap(self):
+        return f"{self.labelmap_key}_path" in self.dataframe.columns
+
+
+class MIReader(MIReaderBase):
+
+    @classmethod
+    def _load_image(cls, img_path):
+        img = sitk.ReadImage(img_path)
+        return cls.get_array_from_sitk_image(img)
+
+    @classmethod
+    def get_array_from_sitk_image(cls, img):
+        def validate(v):
+            if v == 0:
+                return 1
+
+        x = validate(int(img.GetDirection()[0]))
+        y = validate(int(img.GetDirection()[4]))
+        z = validate(int(img.GetDirection()[8]))
+        return sitk.GetArrayFromImage(img)[::x, ::y, ::z]
+
+    def _preprocess(self, image):
+        raise NotImplementedError()
 
     def load_image(self, img_idx: Union[str, int]):
 
@@ -384,9 +386,6 @@ class MIReader(object):
     def load_sitk_labelmap(self, img_idx):
         labelmap_path = self.dataframe.iloc[img_idx][f"{self.labelmap_key}_path"]
         return sitk.ReadImage(labelmap_path)
-
-    def has_labelmap(self):
-        return f"{self.labelmap_key}_path" in self.dataframe.columns
 
     def load_metadata(self, img_idx):
         image_path = self.dataframe.iloc[img_idx][f"{self.image_key}_path"]
@@ -496,9 +495,6 @@ class MIReader(object):
             self.export_2d_slices(self.dir_path, label)
             slices = np.load(path)
         return slices
-
-    def prune_image_list(self, keep_image_names):
-        pass
 
     def generate_resampled(
             self, spacing, parallel=True, num_workers=-1, image_types=None, overwrite=False
