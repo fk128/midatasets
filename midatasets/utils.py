@@ -1,7 +1,7 @@
 import os
 from collections import defaultdict
 from pathlib import Path
-from typing import Tuple, List, Union, Iterable
+from typing import List, Dict
 
 import SimpleITK as sitk
 import numpy as np
@@ -25,7 +25,7 @@ def printProgressBar(iteration, total, prefix='', suffix='', decimals=1, length=
         length      - Optional  : character length of bar (Int)
         fill        - Optional  : bar fill character (Str)
     """
-    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+    percent = ("0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
     filledLength = int(length * iteration // total)
     bar = fill * filledLength + '-' * (length - filledLength)
     print('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end='\r')
@@ -199,21 +199,82 @@ def get_spacing_dirname(spacing):
         spacing = [spacing]
 
     if sum(spacing) <= 0:
-        spacing_dirname = configs.get('native_images_dir')
+        spacing_dirname = configs.native_images_dir
     elif len(spacing) == 1:
-        spacing_dirname = configs.get('subsampled_images_dir_prefix') + str(spacing[0]) + 'mm'
+        spacing_dirname = configs.subsampled_dir_prefix + str(spacing[0]) + 'mm'
     else:
         spacing_str = ''
         for s in spacing:
             spacing_str += str(s) + '-'
         spacing_str = spacing_str[:-1]
-        spacing_dirname = configs.get('subsampled_images_dir_prefix') + spacing_str + 'mm'
+        spacing_dirname = configs.subsampled_dir_prefix + spacing_str + 'mm'
 
     return spacing_dirname
 
 
-def grouped_files(files_iter: Union[List, Iterable], ext: Tuple[str], dataset_path: Union[Path, str],
-                  key: str = 'path'):
+def strip_extension(path):
+    path = Path(path)
+    remove = []
+    for e in path.suffixes:
+        if e in {'.jpg', '.jpeg', '.nii', 'gz', '.json', '.yaml'}:
+            remove.append(e)
+
+    return str(path).rstrip(''.join(path.suffixes))
+
+
+def parse_filepaths(filepaths: List, root_prefix: str):
+    # # find common suffix
+    #
+    if len(filepaths) > 1:
+        suffix = os.path.commonprefix([c['path'][::-1] for c in filepaths])[::-1]
+    dirname_to_datatype = {v['dirname']: v['name'] for v in configs.data_types}
+
+    parsed_filepaths = []
+    for file in filepaths:
+        prefix = str(Path(file['path']).relative_to(root_prefix))
+
+        try:
+            base, spacing, filename = prefix.rsplit('/', 2)
+            base = base.split('/', 1)
+            if len(base) > 1:
+                data_type_dirname, label = base
+            else:
+                data_type_dirname, label = base[0], None
+        except:
+            logger.error(f"Failed to parse path {prefix}")
+            continue
+
+        if data_type_dirname not in dirname_to_datatype:
+            logger.error(f'Invalid data_type {data_type_dirname} from acceptable {dirname_to_datatype.keys()}')
+            continue
+        data_type = dirname_to_datatype[data_type_dirname]
+
+        if len(filepaths) > 1:
+            filename = filename.replace(suffix, '')
+        filename = strip_extension(filename)
+
+        image_key = f'{data_type}/{label}' if label else data_type
+        parsed_filepaths.append({'spacing': spacing,
+                                 'path': file['path'],
+                                 'filename': filename,
+                                 'key': image_key,
+                                 'prefix': prefix,
+                                 'data_type': data_type})
+    return parsed_filepaths
+
+
+def find_longest_matching_name(name, filenames):
+    longest_name = ''
+    for existing_name in filenames:
+        if existing_name in name and len(existing_name) > len(
+                longest_name):  # check if subset of existing name
+            longest_name = existing_name
+    if len(longest_name) > 0:
+        name = longest_name
+    return name
+
+
+def grouped_by_name(files_iter: Dict[str, List], root_prefix: str) -> Dict:
     """
     group files by spacing/name/image_type
     :param files_iter:
@@ -222,38 +283,40 @@ def grouped_files(files_iter: Union[List, Iterable], ext: Tuple[str], dataset_pa
     :param key:
     :return:
     """
-    if not isinstance(ext, tuple):
-        ext = (ext,)
+
     files = defaultdict(dict)
-    for basefile_path in files_iter:
-        file_path = basefile_path[key]
-        prefix = str(Path(file_path).relative_to(dataset_path))
+    for data_type, file_list in files_iter.items():
+        file_list = parse_filepaths(file_list, root_prefix=root_prefix)
+        for file in file_list:
+            spacing = file['spacing']
+            name = file['filename']
+            image_key = file['key']
+            if spacing not in files:
+                files[spacing] = defaultdict(dict)
 
-        if len(prefix.split('/')) == 3:
-            label = None
-            image_type, spacing, filename = prefix.split('/')
-        elif len(prefix.split('/')) == 4:
-            image_type, label, spacing, filename = prefix.split('/')
-        else:
-            logger.error(f'Failed to match pattern for grouping {prefix}')
-            continue
+            if data_type != configs.primary_type:
+                name = find_longest_matching_name(name,
+                                                  filenames=files[spacing].keys())
 
-        name = filename
-        for e in ext:
-            if filename.endswith(e):
-                name = name.replace(e, '')
-        image_type_dir = configs.get('remap_dirs', {}).get(image_type, image_type)
-        image_key = f'{image_type_dir}-{label}' if label else image_type_dir
-        if spacing not in files:
-            files[spacing] = defaultdict(dict)
-
-        if image_type != 'images':
-            longest_name = ''
-            for existing_name in files[spacing].keys():
-                if existing_name in name and len(existing_name) > len(longest_name):  # check if subset of existing name
-                    longest_name = existing_name
-            if len(longest_name) > 0:
-                name = longest_name
-
-        files[spacing][name][image_key] = {k: str(v) for k, v in basefile_path.items()}
+            files[spacing][name][image_key] = file
     return {k: dict(v) for k, v in files.items()}
+
+
+def grouped_by_key(files_iter: Dict[str, List], root_prefix: str) -> Dict:
+    files = defaultdict(list)
+    for data_type, file_list in files_iter.items():
+        file_list = parse_filepaths(file_list, root_prefix=root_prefix)
+        for file in file_list:
+            image_key = file.pop('key')
+            files[image_key].append(
+                file)
+    return dict(files)
+
+
+def grouped_files(files_iter: Dict[str, List], root_prefix: str, by: str = 'name') -> Dict:
+    if by == 'name':
+        return grouped_by_name(files_iter, root_prefix)
+    elif by == 'key':
+        return grouped_by_key(files_iter, root_prefix)
+    else:
+        raise NotImplementedError
