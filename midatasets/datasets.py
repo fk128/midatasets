@@ -2,6 +2,7 @@ import os
 from typing import Optional, Dict, Union
 
 from loguru import logger
+
 from midatasets import configs
 from midatasets.MIReader import MIReader
 from midatasets.databases import MIDatasetDBBase, MIDatasetDBTypes, MIDatasetModel
@@ -16,7 +17,7 @@ def get_db(db: Optional[Union[MIDatasetDBBase, str]] = None) -> MIDatasetDBBase:
     elif isinstance(db, str):
         return MIDatasetDBTypes[db].value()
     else:
-        return MIDatasetDBTypes[configs.get("database", "yaml")].value()
+        return MIDatasetDBTypes[configs.database].value()
 
 
 class MIDatasetStore:
@@ -39,7 +40,7 @@ class MIDatasetStore:
         if remote:
             return DatasetS3Backend(prefix=info['aws_s3_prefix'], bucket=info['aws_s3_bucket'])
         else:
-            return DatasetLocalBackend(root_path=f"{os.path.expandvars(configs.get('root_path'))}/{name}")
+            return DatasetLocalBackend(root_path=f"{os.path.expandvars(configs.root_path)}/{name}")
 
     def create(self, dataset: MIDatasetModel):
         return self._db.create(item=dataset)
@@ -58,7 +59,7 @@ class MIDatasetStore:
     def get_local_path(self, name: str):
         dataset = self.get_info(name)
         path = os.path.join(
-            configs.get("root_path"), dataset.get("subpath", None) or dataset["name"]
+            configs.root_path, dataset.get("subpath", None) or dataset["name"]
         )
         return os.path.expandvars(path)
 
@@ -66,7 +67,7 @@ class MIDatasetStore:
         dataset = self.get_info(name)
         dataset["spacing"] = spacing
         dataset["dir_path"] = os.path.join(
-            configs.get("root_path"), dataset.get("subpath", None) or dataset["name"]
+            configs.root_path, dataset.get("subpath", None) or dataset["name"]
         )
         dataset.update(kwargs)
         return MIReader.from_dict(**dataset)
@@ -90,7 +91,7 @@ def _load_dataset_from_db(name, **kwargs) -> MIReader:
         raise Exception(f'Dataset {name} not found')
 
     dataset["dir_path"] = os.path.join(
-        configs.get("root_path"), dataset.get("subpath", None) or dataset["name"]
+        configs.root_path, dataset.get("subpath", None) or dataset["name"]
     )
     dataset.update(kwargs)
     return MIReader.from_dict(**dataset)

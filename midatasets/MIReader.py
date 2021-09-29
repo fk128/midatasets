@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Optional, Callable, Union, Tuple, Dict
 
@@ -80,7 +81,7 @@ class MIReaderBase:
             # in case local subdir is different from remote prefix
             if self.remote_prefix:
                 self.remote_dataset_name = self.remote_prefix.replace(
-                    get_configs().get("root_s3_prefix"), ""
+                    get_configs().root_s3_prefix, ""
                 ).replace("/", "")
             else:
                 self.remote_dataset_name = self.name
@@ -130,7 +131,7 @@ class MIReaderBase:
         return len(self.dataframe)
 
     def get_root_path(self):
-        return get_configs().get("root_path")
+        return get_configs().root_path
 
     def load_metadata_from_file(self, filename: str = "dataset.yaml"):
         metadata_path = Path(self.dir_path) / filename
@@ -203,13 +204,14 @@ class MIReaderBase:
         if not files:
             raise FileNotFoundError
         files = next(iter(files.values()))
+        self.local_data = files
         for name, images in files.items():
-            files[name] = {f"{k}_path": v["path"] for k, v in images.items()}
+            files[name] = {f"{k}": v["path"] for k, v in images.items()}
 
         self.dataframe = pd.DataFrame.from_dict(files, orient="index")
         try:
             if self.dropna:
-                self.dataframe.dropna(inplace=True, subset=[f"{self.image_key}_path"])
+                self.dataframe.dropna(inplace=True, subset=[f"{self.image_key}"])
         except:
             pass
 
@@ -239,7 +241,7 @@ class MIReaderBase:
         if self.label is None:
             return "labelmap"
         else:
-            return f"labelmap-{self.label}"
+            return f"labelmap/{self.label}"
 
     @property
     def label_mapping(self):
@@ -251,9 +253,9 @@ class MIReaderBase:
     def get_image_list(self, key: Optional[str] = None, is_shuffled: bool = False):
         key = key or self.image_key
         if is_shuffled:
-            return list(self.dataframe[f"{key}_path"].sample(frac=1).values)
+            return list(self.dataframe[f"{key}"].sample(frac=1).values)
         else:
-            return list(self.dataframe[f"{key}_path"].values)
+            return list(self.dataframe[f"{key}"].values)
 
     def get_spacing_dirname(self, spacing: Optional[Union[int, float]] = None) -> str:
         return get_spacing_dirname(spacing)
@@ -280,13 +282,13 @@ class MIReaderBase:
 
     def get_image_path(self, img_idx: int, key: Optional[str] = None):
         key = key or self.image_key
-        return self.dataframe.iloc[img_idx][f"{key}_path"]
+        return self.dataframe.iloc[img_idx][f"{key}"]
 
     def get_image_names(self):
         return list(self.dataframe.index)
 
     def has_labelmap(self):
-        return f"{self.labelmap_key}_path" in self.dataframe.columns
+        return f"{self.labelmap_key}" in self.dataframe.columns
 
 
 class MIReader(MIReaderBase):
@@ -329,7 +331,7 @@ class MIReader(MIReaderBase):
             nearest: bool = False,
     ):
         key = key or self.image_key
-        image_path = self.dataframe.iloc[img_idx][f"{key}_path"]
+        image_path = self.dataframe.iloc[img_idx][f"{key}"]
         sitk_image = sitk.ReadImage(image_path)
         sitk_image = sitk_resample(
             sitk_image,
@@ -344,7 +346,7 @@ class MIReader(MIReaderBase):
 
     def _load_image_by_name(self, name: str):
         try:
-            path = self.dataframe.loc[name, f"{self.image_key}_path"]
+            path = self.dataframe.loc[name, f"{self.image_key}"]
         except:
             raise Exception(name + " does not exist in dataset")
 
@@ -355,7 +357,7 @@ class MIReader(MIReaderBase):
 
     def load_labelmap(self, img_idx):
         if type(img_idx) is int:
-            labelmap_path = self.dataframe.iloc[img_idx][f"{self.labelmap_key}_path"]
+            labelmap_path = self.dataframe.iloc[img_idx][f"{self.labelmap_key}"]
             return self._load_image(labelmap_path)
         else:
             return self._load_labelmap_by_name(img_idx)
@@ -370,7 +372,7 @@ class MIReader(MIReaderBase):
 
     def _load_labelmap_by_name(self, name):
         try:
-            path = self.dataframe.loc[name, f"{self.labelmap_key}_path"]
+            path = self.dataframe.loc[name, f"{self.labelmap_key}"]
         except:
             raise Exception(name + " does not exist in dataset")
 
@@ -380,15 +382,15 @@ class MIReader(MIReaderBase):
             return self._load_image(path)
 
     def load_sitk_image(self, img_idx):
-        image_path = self.dataframe.iloc[img_idx][f"{self.image_key}_path"]
+        image_path = self.dataframe.iloc[img_idx][f"{self.image_key}"]
         return sitk.ReadImage(image_path)
 
     def load_sitk_labelmap(self, img_idx):
-        labelmap_path = self.dataframe.iloc[img_idx][f"{self.labelmap_key}_path"]
+        labelmap_path = self.dataframe.iloc[img_idx][f"{self.labelmap_key}"]
         return sitk.ReadImage(labelmap_path)
 
     def load_metadata(self, img_idx):
-        image_path = self.dataframe.iloc[img_idx][f"{self.image_key}_path"]
+        image_path = self.dataframe.iloc[img_idx][f"{self.image_key}"]
         reader = sitk.ImageFileReader()
 
         reader.SetFileName(image_path)
@@ -500,13 +502,16 @@ class MIReader(MIReaderBase):
             self, spacing, parallel=True, num_workers=-1, image_types=None, overwrite=False
     ):
         def resample(paths, target_spacing):
+            if parallel:
+                # https://github.com/Delgan/loguru/issues/498
+                logger.add(lambda m: sys.stderr.write(m))
 
             for k, path in paths.items():
                 try:
-                    image_type = k.replace("_path", "")
-                    if "path" not in k or (
-                            image_types and image_type not in image_types
-                    ):
+                    image_type = k.split("/")[0]
+                    if image_types and image_type not in image_types:
+                        continue
+                    if not isinstance(path, str) or not path.endswith(".nii.gz"):
                         continue
 
                     output_path = path.replace(
@@ -514,7 +519,7 @@ class MIReader(MIReaderBase):
                     )
                     if Path(output_path).exists() and not overwrite:
                         logger.info(
-                            f"[{image_type}/{get_spacing_dirname(target_spacing)}/{Path(output_path).name}] already exists"
+                            f"[{k}/{get_spacing_dirname(target_spacing)}/{Path(output_path).name}] already exists"
                         )
                         continue
                     Path(output_path).parent.mkdir(exist_ok=True, parents=True)
@@ -541,8 +546,9 @@ class MIReader(MIReaderBase):
                     logger.exception(f"{k}: {path}")
 
         if parallel:
-            Parallel(n_jobs=num_workers)(
-                delayed(resample)(paths, spacing) for paths in self
+            logger.remove()
+            Parallel(n_jobs=num_workers )(
+                delayed(resample)(dict(paths), spacing) for paths in self
             )
         else:
             [resample(paths, spacing) for paths in self]
@@ -558,10 +564,10 @@ class MIReader(MIReaderBase):
         name = self.get_image_name(i)
         logger.info(name)
         output_image, image_name_suffix = get_output(
-            get_configs().get("images_crop_prefix")
+            get_configs().images_crop_prefix
         )
         output_labelmap, labelmap_name_suffix = get_output(
-            get_configs().get("labelmaps_crop_prefix")
+            get_configs().labelmaps_crop_prefix
         )
 
         lmap = self.load_labelmap(i)
@@ -617,7 +623,7 @@ class MIReader(MIReaderBase):
 
     def load_image_crop(self, img_idx, vol_size=(64, 64, 64), label=1):
         name = self.get_image_name(img_idx)
-        name_suffix = get_configs().get("images_crop_prefix") + str(vol_size[0])
+        name_suffix = get_configs().images_crop_prefix + str(vol_size[0])
         output = self.get_imagetype_path(name_suffix)
         path = os.path.join(
             output, name + "_" + str(label) + "_" + name_suffix + ".nii.gz"
@@ -626,7 +632,7 @@ class MIReader(MIReaderBase):
 
     def load_labelmap_crop(self, img_idx, vol_size=(64, 64, 64), label=1):
         name = self.get_image_name(img_idx)
-        name_suffix = get_configs().get("labelmaps_crop_prefix") + str(vol_size[0])
+        name_suffix = get_configs().labelmaps_crop_prefix + str(vol_size[0])
         output = self.get_imagetype_path(name_suffix)
         path = os.path.join(
             output, name + "_" + str(label) + "_" + name_suffix + ".nii.gz"
