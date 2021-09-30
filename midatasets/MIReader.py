@@ -171,7 +171,7 @@ class MIReaderBase:
             self,
             max_images: Optional[int] = None,
             dryrun: bool = False,
-            include: Optional[str] = None,
+            include: Optional[List[str]] = None,
             **kwargs,
     ):
         """
@@ -206,12 +206,12 @@ class MIReaderBase:
         files = next(iter(files.values()))
         self.local_data = files
         for name, images in files.items():
-            files[name] = {f"{k}": v["path"] for k, v in images.items()}
+            files[name] = {f"{k}_path": v["path"] for k, v in images.items()}
 
         self.dataframe = pd.DataFrame.from_dict(files, orient="index")
         try:
             if self.dropna:
-                self.dataframe.dropna(inplace=True, subset=[f"{self.image_key}"])
+                self.dataframe.dropna(inplace=True, subset=[f"{self.image_key}_path"])
         except:
             pass
 
@@ -253,9 +253,9 @@ class MIReaderBase:
     def get_image_list(self, key: Optional[str] = None, is_shuffled: bool = False):
         key = key or self.image_key
         if is_shuffled:
-            return list(self.dataframe[f"{key}"].sample(frac=1).values)
+            return list(self.dataframe[f"{key}_path"].sample(frac=1).values)
         else:
-            return list(self.dataframe[f"{key}"].values)
+            return list(self.dataframe[f"{key}_path"].values)
 
     def get_spacing_dirname(self, spacing: Optional[Union[int, float]] = None) -> str:
         return get_spacing_dirname(spacing)
@@ -282,7 +282,7 @@ class MIReaderBase:
 
     def get_image_path(self, img_idx: int, key: Optional[str] = None):
         key = key or self.image_key
-        return self.dataframe.iloc[img_idx][f"{key}"]
+        return self.dataframe.iloc[img_idx][f"{key}_path"]
 
     def get_image_names(self):
         return list(self.dataframe.index)
@@ -331,7 +331,7 @@ class MIReader(MIReaderBase):
             nearest: bool = False,
     ):
         key = key or self.image_key
-        image_path = self.dataframe.iloc[img_idx][f"{key}"]
+        image_path = self.dataframe.iloc[img_idx][f"{key}_path"]
         sitk_image = sitk.ReadImage(image_path)
         sitk_image = sitk_resample(
             sitk_image,
@@ -346,7 +346,7 @@ class MIReader(MIReaderBase):
 
     def _load_image_by_name(self, name: str):
         try:
-            path = self.dataframe.loc[name, f"{self.image_key}"]
+            path = self.dataframe.loc[name, f"{self.image_key}_path"]
         except:
             raise Exception(name + " does not exist in dataset")
 
@@ -382,7 +382,7 @@ class MIReader(MIReaderBase):
             return self._load_image(path)
 
     def load_sitk_image(self, img_idx):
-        image_path = self.dataframe.iloc[img_idx][f"{self.image_key}"]
+        image_path = self.dataframe.iloc[img_idx][f"{self.image_key}_path"]
         return sitk.ReadImage(image_path)
 
     def load_sitk_labelmap(self, img_idx):
@@ -390,7 +390,7 @@ class MIReader(MIReaderBase):
         return sitk.ReadImage(labelmap_path)
 
     def load_metadata(self, img_idx):
-        image_path = self.dataframe.iloc[img_idx][f"{self.image_key}"]
+        image_path = self.dataframe.iloc[img_idx][f"{self.image_key}_path"]
         reader = sitk.ImageFileReader()
 
         reader.SetFileName(image_path)
