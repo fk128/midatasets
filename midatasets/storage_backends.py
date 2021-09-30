@@ -1,16 +1,13 @@
 import fnmatch
-import logging
 import os
 from pathlib import Path
 from typing import Callable, Union, Optional, Tuple, List
 
 import boto3
 import botocore
-
+from loguru import logger
 from midatasets import configs
 from midatasets.utils import get_spacing_dirname, grouped_files
-
-logger = logging.getLogger(__name__)
 
 
 class DatasetStorageBackendBase:
