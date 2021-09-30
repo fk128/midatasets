@@ -47,10 +47,13 @@ class MIDatasetStore:
 
     def delete(self, name: str):
         res = self._db.delete({"name": name})
-        if res > 0:
-            logger.info(f"deleted {name}")
-        else:
-            logger.error(f"{name} not found for deletion")
+        try:
+            if res > 0:
+                logger.info(f"deleted {name}")
+            else:
+                logger.error(f"{name} not found for deletion")
+        except:
+            pass
         return res
 
     def update(self, name: str, dataset: MIDatasetModel):
