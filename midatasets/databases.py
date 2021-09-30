@@ -36,7 +36,9 @@ class MIDatasetModel(BaseModel):
     label_mappings: Optional[Dict]
     aws_s3_bucket: str
     aws_s3_prefix: str
+    description: str = ""
     created_time: datetime = Field(default_factory=datetime.now)
+    modified_time: datetime = Field(default_factory=datetime.now)
 
     class Config:
         extra = "allow"
