@@ -2,19 +2,18 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Optional, Callable, Union, Tuple, Dict
+from typing import Optional, Callable, Union, Tuple, Dict, List
 
 import SimpleITK as sitk
+import midatasets.preprocessing
+import midatasets.visualise as vis
 import numpy as np
 import pandas as pd
 import yaml
 from joblib import Parallel, delayed
 from loguru import logger
-
-import midatasets.preprocessing
-import midatasets.visualise as vis
 from midatasets import get_configs
-from midatasets.preprocessing import sitk_resample, extract_vol_at_label
+from midatasets.preprocessing import sitk_resample, extract_vol_at_label, normalise_zero_one
 from midatasets.storage_backends import DatasetLocalBackend, DatasetS3Backend, get_backend
 from midatasets.utils import printProgressBar, get_spacing_dirname
 
@@ -499,7 +498,9 @@ class MIReader(MIReaderBase):
         return slices
 
     def generate_resampled(
-            self, spacing, parallel=True, num_workers=-1, image_types=None, overwrite=False
+            self, spacing, parallel=True, num_workers=-1,
+            image_types=None, overwrite=False,
+            cast8bit=False
     ):
         def resample(paths, target_spacing):
             if parallel:
@@ -515,7 +516,8 @@ class MIReader(MIReaderBase):
                         continue
 
                     output_path = path.replace(
-                        get_spacing_dirname(0), get_spacing_dirname(target_spacing)
+                        get_spacing_dirname(0),
+                        ('8bit' if cast8bit else '') + get_spacing_dirname(target_spacing)
                     )
                     if Path(output_path).exists() and not overwrite:
                         logger.info(
@@ -538,16 +540,26 @@ class MIReader(MIReaderBase):
                         f"[{image_type}/{Path(output_path).name}] resampling from {sitk_image.GetSpacing()} "
                         f"to {target_spacing} using {interpolation_str}"
                     )
-                    sitk_image = sitk_resample(
+                    sitk_image: sitk.Image = sitk_resample(
                         sitk_image, spacing, interpolation=interpolation
                     )
+                    if cast8bit:
+                        img = sitk.GetArrayFromImage(sitk_image)
+                        img = (255 * normalise_zero_one(img)).astype("uint8")
+                        sitk_output = sitk.GetImageFromArray(img)
+                        sitk_output.CopyInformation(sitk_image)
+                        for k in sitk_image.GetMetaDataKeys():
+                            sitk_output.SetMetaData(k, sitk_image.GetMetaData(k))
+
+                        sitk_image = sitk_output
+
                     sitk.WriteImage(sitk_image, output_path)
                 except:
                     logger.exception(f"{k}: {path}")
 
         if parallel:
             logger.remove()
-            Parallel(n_jobs=num_workers )(
+            Parallel(n_jobs=num_workers)(
                 delayed(resample)(dict(paths), spacing) for paths in self
             )
         else:
