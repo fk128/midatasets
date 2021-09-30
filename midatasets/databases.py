@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime
 from enum import Enum
 from typing import Optional, Dict, List
 
@@ -8,7 +9,7 @@ import yaml
 from botocore.exceptions import ClientError
 from bson import ObjectId
 from loguru import logger
-from pydantic import BaseModel, BaseSettings
+from pydantic import BaseModel, BaseSettings, Field
 from pymongo import MongoClient
 from smart_open import smart_open
 
@@ -35,6 +36,7 @@ class MIDatasetModel(BaseModel):
     label_mappings: Optional[Dict]
     aws_s3_bucket: str
     aws_s3_prefix: str
+    created_time: datetime = Field(default_factory=datetime.now)
 
     class Config:
         extra = "allow"
