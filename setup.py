@@ -8,10 +8,12 @@ from setuptools import find_packages, setup
 with open('README.md') as readme_file:
     readme = readme_file.read()
 
-
 with open('requirements.txt') as requirements_file:
     requirements = requirements_file.read().splitlines()
-
+with open('requirements_itk.txt') as requirements_file:
+    requirements_itk = requirements_file.read().splitlines()
+with open('requirements_dev.txt') as requirements_file:
+    requirements_dev = requirements_file.read().splitlines()
 
 setup(name='midatasets',
       version='0.9.2',
@@ -29,5 +31,9 @@ setup(name='midatasets',
                    'Operating System :: MacOS :: MacOS X',
                    'Operating System :: Microsoft :: Windows',
                    'Programming Language :: Python :: 3.4'],
-      install_requires=requirements
+      install_requires=requirements,
+      extras_require={
+          'all': requirements + requirements_itk,
+          'pymongo': requirements + ['pymongo'],
+          'dev': requirements + requirements_dev}
       )

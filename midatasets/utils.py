@@ -3,12 +3,21 @@ from collections import defaultdict
 from pathlib import Path
 from typing import List, Dict
 
-import SimpleITK as sitk
-import numpy as np
+try:
+    import SimpleITK as sitk
+except ImportError as e:
+    sitk = e
+try:
+    import numpy as np
+except ImportError as e:
+    np = e
+try:
+    import pydicom as dicom
+except ImportError as e:
+    pydicom = e
 import pandas as pd
-import pydicom as dicom
+
 from loguru import logger
-from skimage.draw import polygon
 
 from midatasets import configs
 
@@ -48,6 +57,7 @@ def read_rtstruct(structure):
 
 
 def get_labelmap_from_rtstruct(contours, slices, image):
+    from skimage.draw import polygon
     z = [s.ImagePositionPatient[2] for s in slices]
     pos_r = slices[0].ImagePositionPatient[1]
     o_r = int(slices[0].ImageOrientationPatient[4])

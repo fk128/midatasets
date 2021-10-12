@@ -1,16 +1,6 @@
-numpy>= 1.19.1
-scipy>=1.5.0
-matplotlib
-pydicom>=2.1.2
-SimpleITK>=2.0.2
-pandas
-scikit-image
-pynrrd
-nibabel
 boto3
-joblib>=1.0.1
 loguru
 pydantic
-pymongo
 pyyaml
 smart_open
+pandas

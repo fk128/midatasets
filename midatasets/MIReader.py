@@ -4,41 +4,51 @@ import sys
 from pathlib import Path
 from typing import Optional, Callable, Union, Tuple, Dict, List
 
-import SimpleITK as sitk
-import midatasets.preprocessing
-import midatasets.visualise as vis
-import numpy as np
 import pandas as pd
 import yaml
-from joblib import Parallel, delayed
 from loguru import logger
 from midatasets import get_configs
-from midatasets.preprocessing import sitk_resample, extract_vol_at_label, normalise_zero_one
-from midatasets.storage_backends import DatasetLocalBackend, DatasetS3Backend, get_backend
-from midatasets.utils import printProgressBar, get_spacing_dirname
+from midatasets.storage_backends import (
+    DatasetLocalBackend,
+    DatasetS3Backend,
+    get_backend,
+)
+
+try:
+    import SimpleITK as sitk
+    import midatasets.preprocessing
+    from midatasets.preprocessing import (
+        sitk_resample,
+        extract_vol_at_label,
+        normalise_zero_one,
+    )
+    import midatasets.visualise as vis
+    import numpy as np
+    from joblib import Parallel, delayed
+    from midatasets.utils import printProgressBar, get_spacing_dirname
+except ImportError as e:
+    sitk = None
 
 
 class MIReaderBase:
-
     def __init__(
-            self,
-            spacing,
-            name: str = "reader",
-            is_cropped: bool = False,
-            crop_size: int = 64,
-            dir_path: Optional[str] = None,
-            ext: str = (".nii.gz",),
-            label: Optional[str] = None,
-            images_only: bool = False,
-            label_mappings: Optional[Dict[str, Dict]] = None,
-            remote_bucket: Optional[str] = None,
-            remote_profile: Optional[str] = None,
-            remote_prefix: Optional[str] = None,
-            remote_backend: Optional[Union[Callable, str]] = DatasetS3Backend,
-            fail_on_error: bool = False,
-            dropna: bool = True,
-
-            **kwargs,
+        self,
+        spacing,
+        name: str = "reader",
+        is_cropped: bool = False,
+        crop_size: int = 64,
+        dir_path: Optional[str] = None,
+        ext: str = (".nii.gz",),
+        label: Optional[str] = None,
+        images_only: bool = False,
+        label_mappings: Optional[Dict[str, Dict]] = None,
+        remote_bucket: Optional[str] = None,
+        remote_profile: Optional[str] = None,
+        remote_prefix: Optional[str] = None,
+        remote_backend: Optional[Union[Callable, str]] = DatasetS3Backend,
+        fail_on_error: bool = False,
+        dropna: bool = True,
+        **kwargs,
     ):
 
         self.label_mappings = label_mappings
@@ -64,9 +74,7 @@ class MIReaderBase:
         self.remote_prefix = remote_prefix
         self._deprecated_check(**kwargs)
 
-        self.local_backend = DatasetLocalBackend(
-            root_path=self.dir_path
-        )
+        self.local_backend = DatasetLocalBackend(root_path=self.dir_path)
 
         metadata = self.load_metadata_from_file()
         if metadata:
@@ -106,15 +114,21 @@ class MIReaderBase:
         return cls(**data)
 
     def _deprecated_check(self, **kwargs):
-        if 'aws_s3_prefix' in kwargs:
-            self.remote_prefix = kwargs.get('aws_s3_prefix')
-            logger.warning(f"replace deprecated argument aws_s3_prefix with remote_prefix")
-        if 'aws_s3_bucket' in kwargs:
-            self.remote_bucket = kwargs.get('aws_s3_bucket')
-            logger.warning(f"replace deprecated argument aws_s3_bucket with remote_bucket")
-        if 'aws_s3_profile' in kwargs:
-            self.remote_profile = kwargs.get('aws_s3_profile')
-            logger.warning(f"replace deprecated argument aws_s3_profile with remote_profile")
+        if "aws_s3_prefix" in kwargs:
+            self.remote_prefix = kwargs.get("aws_s3_prefix")
+            logger.warning(
+                f"replace deprecated argument aws_s3_prefix with remote_prefix"
+            )
+        if "aws_s3_bucket" in kwargs:
+            self.remote_bucket = kwargs.get("aws_s3_bucket")
+            logger.warning(
+                f"replace deprecated argument aws_s3_bucket with remote_bucket"
+            )
+        if "aws_s3_profile" in kwargs:
+            self.remote_profile = kwargs.get("aws_s3_profile")
+            logger.warning(
+                f"replace deprecated argument aws_s3_profile with remote_profile"
+            )
 
     def __getitem__(self, index):
         return dict(self.dataframe.reset_index().iloc[index])
@@ -167,11 +181,11 @@ class MIReaderBase:
             return self.local_backend.list_dirs()
 
     def download(
-            self,
-            max_images: Optional[int] = None,
-            dryrun: bool = False,
-            include: Optional[List[str]] = None,
-            **kwargs,
+        self,
+        max_images: Optional[int] = None,
+        dryrun: bool = False,
+        include: Optional[List[str]] = None,
+        **kwargs,
     ):
         """
         download images using remote backend
@@ -260,7 +274,7 @@ class MIReaderBase:
         return get_spacing_dirname(spacing)
 
     def get_imagetype_path(
-            self, images_type: str, crop_suffix: str = "_crop", split=False
+        self, images_type: str, crop_suffix: str = "_crop", split=False
     ):
 
         suffix = ""
@@ -289,9 +303,11 @@ class MIReaderBase:
     def has_labelmap(self):
         return f"{self.labelmap_key}" in self.dataframe.columns
 
+    def is_valid_data_type(self, key: str):
+        get_configs().data_types
 
-class MIReader(MIReaderBase):
 
+class MIReaderExtended(MIReaderBase):
     @classmethod
     def _load_image(cls, img_path):
         img = sitk.ReadImage(img_path)
@@ -323,11 +339,11 @@ class MIReader(MIReaderBase):
             return self._load_image_by_name(img_idx)
 
     def load_image_and_resample(
-            self,
-            img_idx: int,
-            new_spacing: Union[int, float],
-            key: Optional[str] = None,
-            nearest: bool = False,
+        self,
+        img_idx: int,
+        new_spacing: Union[int, float],
+        key: Optional[str] = None,
+        nearest: bool = False,
     ):
         key = key or self.image_key
         image_path = self.dataframe.iloc[img_idx][f"{key}_path"]
@@ -412,7 +428,12 @@ class MIReader(MIReaderBase):
         )
 
     def extract_random_class_balanced_subvolume(
-            self, img_idx, subvol_size=(64, 64, 64), num=2, class_weights=(1, 1), num_labels=2,
+        self,
+        img_idx,
+        subvol_size=(64, 64, 64),
+        num=2,
+        class_weights=(1, 1),
+        num_labels=2,
     ):
 
         return midatasets.preprocessing.extract_class_balanced_example_array(
@@ -498,9 +519,13 @@ class MIReader(MIReaderBase):
         return slices
 
     def generate_resampled(
-            self, spacing, parallel=True, num_workers=-1,
-            image_types=None, overwrite=False,
-            cast8bit=False
+        self,
+        spacing,
+        parallel=True,
+        num_workers=-1,
+        image_types=None,
+        overwrite=False,
+        cast8bit=False,
     ):
         def resample(paths, target_spacing):
             if parallel:
@@ -517,7 +542,8 @@ class MIReader(MIReaderBase):
 
                     output_path = path.replace(
                         get_spacing_dirname(0),
-                        ('8bit' if cast8bit else '') + get_spacing_dirname(target_spacing)
+                        ("8bit" if cast8bit else "")
+                        + get_spacing_dirname(target_spacing),
                     )
                     if Path(output_path).exists() and not overwrite:
                         logger.info(
@@ -575,9 +601,7 @@ class MIReader(MIReaderBase):
 
         name = self.get_image_name(i)
         logger.info(name)
-        output_image, image_name_suffix = get_output(
-            get_configs().images_crop_prefix
-        )
+        output_image, image_name_suffix = get_output(get_configs().images_crop_prefix)
         output_labelmap, labelmap_name_suffix = get_output(
             get_configs().labelmaps_crop_prefix
         )
@@ -657,3 +681,11 @@ class MIReader(MIReaderBase):
         else:
             image = self.load_labelmap(img_idx)
         vis.display_slices(image, step=step, dim=dim)
+
+
+if sitk:
+    MIReader = MIReaderExtended
+else:
+    MIReader = MIReaderBase
+
+__all__ = [MIReader]
