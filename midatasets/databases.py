@@ -7,27 +7,27 @@ from typing import Optional, Dict, List
 import boto3
 import yaml
 from botocore.exceptions import ClientError
-from bson import ObjectId
+# from bson import ObjectId
 from loguru import logger
 from pydantic import BaseModel, BaseSettings, Field
 from pymongo import MongoClient
 from smart_open import smart_open
 
 
-class PyObjectId(ObjectId):
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
-
-    @classmethod
-    def validate(cls, v):
-        if not ObjectId.is_valid(v):
-            raise ValueError("Invalid objectid")
-        return ObjectId(v)
-
-    @classmethod
-    def __modify_schema__(cls, field_schema):
-        field_schema.update(type="string")
+# class PyObjectId(ObjectId):
+#     @classmethod
+#     def __get_validators__(cls):
+#         yield cls.validate
+#
+#     @classmethod
+#     def validate(cls, v):
+#         if not ObjectId.is_valid(v):
+#             raise ValueError("Invalid objectid")
+#         return ObjectId(v)
+#
+#     @classmethod
+#     def __modify_schema__(cls, field_schema):
+#         field_schema.update(type="string")
 
 
 class MIDatasetModel(BaseModel):
