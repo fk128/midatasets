@@ -5,14 +5,14 @@ from loguru import logger
 
 from midatasets import configs
 from midatasets.MIReader import MIReader
-from midatasets.databases import MIDatasetDBBase, MIDatasetDBTypes, MIDatasetModel
+from midatasets.databases import DBBase, MIDatasetDBTypes, MIDatasetModel
 from midatasets.storage_backends import DatasetS3Backend, DatasetLocalBackend
 
 _midataset_store = None
 
 
-def get_db(db: Optional[Union[MIDatasetDBBase, str]] = None) -> MIDatasetDBBase:
-    if isinstance(db, MIDatasetDBBase):
+def get_db(db: Optional[Union[DBBase, str]] = None) -> DBBase:
+    if isinstance(db, DBBase):
         return db
     elif isinstance(db, str):
         return MIDatasetDBTypes[db].value()
@@ -21,8 +21,8 @@ def get_db(db: Optional[Union[MIDatasetDBBase, str]] = None) -> MIDatasetDBBase:
 
 
 class MIDatasetStore:
-    def __init__(self, db: Optional[Union[MIDatasetDBBase, str]] = None):
-        self._db: MIDatasetDBBase = get_db(db)
+    def __init__(self, db: Optional[Union[DBBase, str]] = None):
+        self._db: DBBase = get_db(db)
 
     def get_info_all(self, selector: Optional[Dict] = None, names_only: bool = False):
         datasets = self._db.find_all(selector=selector)

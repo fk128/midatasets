@@ -2,11 +2,11 @@ import os
 
 import pytest
 from midatasets.databases import (
-    MIDatasetDBBaseYaml,
+    DBYaml,
     MIDatasetModel,
-    CompositeDB,
-    MIDatasetDBBaseMongoDb,
-    MIDatasetDBDynamoDB,
+    DBComposite,
+    DBMongodb,
+    DBDynamodb,
 )
 from midatasets.datasets import MIDatasetStore
 from moto import mock_dynamodb2
@@ -28,12 +28,12 @@ def test_datasets_composite(tmp_path):
 
 @pytest.mark.skip(msg="TODO: mock mongo")
 def test_mongodb():
-    db = MIDatasetDBBaseMongoDb()
+    db = DBMongodb()
 
 
 
 def test_yaml_crud(tmp_path):
-    db = MIDatasetDBBaseYaml(path=f"{tmp_path}/midatasets.yaml")
+    db = DBYaml(path=f"{tmp_path}/midatasets.yaml")
     m = MIDatasetModel(name="foo", aws_s3_bucket="v", aws_s3_prefix="s")
 
     db.create(m)
@@ -50,8 +50,8 @@ def test_yaml_crud(tmp_path):
 
 
 def test_composite(tmp_path):
-    db1 = MIDatasetDBBaseYaml(path=f"{tmp_path}/midatasets1.yaml")
-    db2 = MIDatasetDBBaseYaml(path=f"{tmp_path}/midatasets2.yaml")
+    db1 = DBYaml(path=f"{tmp_path}/midatasets1.yaml")
+    db2 = DBYaml(path=f"{tmp_path}/midatasets2.yaml")
 
     for i in range(10):
         m = MIDatasetModel(name=str(i), aws_s3_bucket="v", aws_s3_prefix="s")
@@ -60,7 +60,7 @@ def test_composite(tmp_path):
         else:
             db2.create(m)
 
-    cdb = CompositeDB([db1, db2])
+    cdb = DBComposite([db1, db2])
     assert len(cdb.find_all()) == 10
 
 
@@ -82,7 +82,7 @@ def test_dynamodb():
         ProvisionedThroughput={"ReadCapacityUnits": 5, "WriteCapacityUnits": 5},
     )
 
-    db = MIDatasetDBDynamoDB(table_name="test")
+    db = DBDynamodb(table_name="test")
 
     for i in range(10):
         m = MIDatasetModel(name=str(i), aws_s3_bucket="a", aws_s3_prefix="s")

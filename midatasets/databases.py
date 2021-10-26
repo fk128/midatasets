@@ -46,7 +46,14 @@ class MIDatasetModel(BaseModel):
         json_encoders = {ObjectId: str}
 
 
-class MIDatasetDBBase:
+class DBBase:
+    class Config(BaseSettings):
+        db_name: str = "db"
+        table_name: str = "table"
+        primary_key: str = "name"
+        path: str = ""
+        host: Optional[str] = None
+
     def find_all(self, selector: Optional[Dict] = None):
         raise NotImplementedError
 
@@ -63,28 +70,19 @@ class MIDatasetDBBase:
         raise NotImplementedError
 
 
-class MIDatasetDBBaseMongoDb(MIDatasetDBBase):
-    class Config(BaseSettings):
-        host: str = None
-        db_name: str = "midatasets"
-        collection_name: str = "datasets"
-        primary_key: str = "name"
-
-        class Config:
-            env_prefix = "midatasets_mongo_"
-
+class DBMongodb(DBBase):
     def __init__(
-            self,
-            host: str = None,
-            db_name: str = None,
-            collection_name: str = None,
-            primary_key: str = None,
+        self,
+        host: str = None,
+        db_name: str = None,
+        collection_name: str = None,
+        primary_key: str = None,
     ):
         config = self.Config()
         self.db_name = db_name or config.db_name
-        self.collection_name = collection_name or config.collection_name
+        self.collection_name = collection_name or config.table_name
         self.primary_key = primary_key or config.primary_key
-        self.client = MongoClient(host=host)
+        self.client = MongoClient(host=host or config.host)
         self.db = self.client[self.db_name]
         self.collection = self.db[self.collection_name]
         self.collection.create_index(self.primary_key, unique=True)
@@ -109,12 +107,12 @@ class MIDatasetDBBaseMongoDb(MIDatasetDBBase):
         return self.collection.delete_one(selector).deleted_count
 
 
-class MIDatasetDBDict(MIDatasetDBBase):
+class DBDict(DBBase):
     def __init__(
-            self,
-            data: Optional[Dict] = None,
-            collection_name: str = "datasets",
-            primary_key: str = "name",
+        self,
+        data: Optional[Dict] = None,
+        collection_name: str = "datasets",
+        primary_key: str = "name",
     ):
         super().__init__()
         self.collection_name = collection_name
@@ -145,11 +143,11 @@ class MIDatasetDBDict(MIDatasetDBBase):
         return None
 
     def create(self, item: BaseModel):
-        if self.find({"name": item.name}) is None:
+        if self.find({self.primary_key: getattr(item, self.primary_key)}) is None:
             self.data[self.collection_name].append(json.loads(item.json()))
             self._save()
         else:
-            raise KeyError(f"name {item.name} already exists")
+            raise KeyError(f"name {getattr(item, self.primary_key)} already exists")
 
     def update(self, selector, item: BaseModel):
         update_count = 0
@@ -172,8 +170,8 @@ class MIDatasetDBDict(MIDatasetDBBase):
         return del_count
 
 
-class CompositeDB(MIDatasetDBBase):
-    def __init__(self, dbs: List[MIDatasetDBBase]):
+class DBComposite(DBBase):
+    def __init__(self, dbs: List[DBBase]):
         self.dbs = dbs
 
     def find_all(self, selector=None):
@@ -197,38 +195,30 @@ class CompositeDB(MIDatasetDBBase):
         return result
 
     def create(self, item: BaseModel):
-        logger.info(f'Created using {self.dbs[0].__class__}')
+        logger.info(f"Created using {self.dbs[0].__class__}")
         return self.dbs[0].create(item)
 
     def update(self, selector, item: BaseModel):
-        logger.info(f'Updated using {self.dbs[0].__class__}')
+        logger.info(f"Updated using {self.dbs[0].__class__}")
         return self.dbs[0].update(selector, item)
 
     def delete(self, selector):
-        logger.info(f'Deleted using {self.dbs[0].__class__}')
+        logger.info(f"Deleted using {self.dbs[0].__class__}")
         return self.dbs[0].delete(selector)
 
 
-class MIDatasetDBBaseYaml(MIDatasetDBDict):
-    class Config(BaseSettings):
-        path: str = "~/.midatasets.yaml"
-        collection_name: str = "datasets"
-        primary_key: str = "name"
-
-        class Config:
-            env_prefix = "midatasets_yaml_"
-
+class DBYaml(DBDict):
     def __init__(
-            self,
-            path: Optional[str] = None,
-            collection_name: Optional[str] = None,
-            primary_key: Optional[str] = None,
+        self,
+        path: Optional[str] = None,
+        collection_name: Optional[str] = None,
+        primary_key: Optional[str] = None,
     ):
 
         config = self.Config()
         self.path = path or config.path
         self.path = os.path.expanduser(self.path)
-        collection_name = collection_name or config.collection_name
+        collection_name = collection_name or config.table_name
         primary_key = primary_key or config.primary_key
         super().__init__(
             data=None, collection_name=collection_name, primary_key=primary_key
@@ -246,18 +236,11 @@ class MIDatasetDBBaseYaml(MIDatasetDBDict):
             yaml.dump(self.data, f, default_flow_style=False, sort_keys=False)
 
 
-class MIDatasetDBDynamoDB(MIDatasetDBBase):
-    class Config(BaseSettings):
-        table_name: str = "datasets"
-        primary_key: str = "name"
-
-        class Config:
-            env_prefix = "midatasets_dynamodb_"
-
+class DBDynamodb(DBBase):
     def __init__(
-            self,
-            table_name: str = None,
-            primary_key: str = None,
+        self,
+        table_name: str = None,
+        primary_key: str = None,
     ):
         config = self.Config()
         self.table_name = table_name or config.table_name
@@ -299,8 +282,42 @@ class MIDatasetDBDynamoDB(MIDatasetDBBase):
         return response
 
 
-class MIDatasetDBTypes(MIDatasetDBBase, Enum):
-    composite = CompositeDB
-    yaml = MIDatasetDBBaseYaml
-    mongo = MIDatasetDBBaseMongoDb
-    dynamodb = MIDatasetDBDynamoDB
+class MIDatasetDBDynamodb(DBDynamodb):
+    class Config(BaseSettings):
+        table_name: str = "datasets"
+        primary_key: str = "name"
+
+        class Config:
+            env_prefix = "midatasets_dynamodb_"
+
+
+class MIDatasetDBYaml(DBYaml):
+    class Config(BaseSettings):
+        path: str = "~/.midatasets.yaml"
+        table_name: str = "datasets"
+        primary_key: str = "name"
+
+        class Config:
+            env_prefix = "midatasets_yaml_"
+
+
+class MIDatasetMongodb(DBMongodb):
+    class Config(BaseSettings):
+        host: str = None
+        db_name: str = "midatasets"
+        collection_name: str = "datasets"
+        primary_key: str = "name"
+
+        class Config:
+            env_prefix = "midatasets_mongo_"
+
+
+class MIDatasetDBComposite(DBComposite):
+    pass
+
+
+class MIDatasetDBTypes(DBBase, Enum):
+    composite = MIDatasetDBComposite
+    yaml = MIDatasetDBYaml
+    mongo = MIDatasetMongodb
+    dynamodb = MIDatasetDBDynamodb
