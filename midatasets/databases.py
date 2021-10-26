@@ -10,7 +10,10 @@ from botocore.exceptions import ClientError
 # from bson import ObjectId
 from loguru import logger
 from pydantic import BaseModel, BaseSettings, Field
-from pymongo import MongoClient
+try:
+    from pymongo import MongoClient
+except:
+    MongoClient = None
 from smart_open import smart_open
 
 
@@ -43,7 +46,7 @@ class MIDatasetModel(BaseModel):
     class Config:
         extra = "allow"
         arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+        # json_encoders = {ObjectId: str}
 
 
 class DBBase:
@@ -70,41 +73,43 @@ class DBBase:
         raise NotImplementedError
 
 
-class DBMongodb(DBBase):
-    def __init__(
-        self,
-        host: str = None,
-        db_name: str = None,
-        collection_name: str = None,
-        primary_key: str = None,
-    ):
-        config = self.Config()
-        self.db_name = db_name or config.db_name
-        self.collection_name = collection_name or config.table_name
-        self.primary_key = primary_key or config.primary_key
-        self.client = MongoClient(host=host or config.host)
-        self.db = self.client[self.db_name]
-        self.collection = self.db[self.collection_name]
-        self.collection.create_index(self.primary_key, unique=True)
+if MongoClient:
 
-    def find_all(self, selector=None):
-        if selector is None:
-            selector = {}
-        return list(self.collection.find(selector))
+    class DBMongodb(DBBase):
+        def __init__(
+            self,
+            host: str = None,
+            db_name: str = None,
+            collection_name: str = None,
+            primary_key: str = None,
+        ):
+            config = self.Config()
+            self.db_name = db_name or config.db_name
+            self.collection_name = collection_name or config.table_name
+            self.primary_key = primary_key or config.primary_key
+            self.client = MongoClient(host=host or config.host)
+            self.db = self.client[self.db_name]
+            self.collection = self.db[self.collection_name]
+            self.collection.create_index(self.primary_key, unique=True)
 
-    def find(self, selector):
-        return self.collection.find_one(selector)
+        def find_all(self, selector=None):
+            if selector is None:
+                selector = {}
+            return list(self.collection.find(selector))
 
-    def create(self, item: BaseModel):
-        return self.collection.insert_one(json.loads(item.json()))
+        def find(self, selector):
+            return self.collection.find_one(selector)
 
-    def update(self, selector, item: BaseModel):
-        return self.collection.replace_one(
-            selector, json.loads(item.json())
-        ).modified_count
+        def create(self, item: BaseModel):
+            return self.collection.insert_one(json.loads(item.json()))
 
-    def delete(self, selector):
-        return self.collection.delete_one(selector).deleted_count
+        def update(self, selector, item: BaseModel):
+            return self.collection.replace_one(
+                selector, json.loads(item.json())
+            ).modified_count
+
+        def delete(self, selector):
+            return self.collection.delete_one(selector).deleted_count
 
 
 class DBDict(DBBase):
@@ -301,16 +306,18 @@ class MIDatasetDBYaml(DBYaml):
             env_prefix = "midatasets_yaml_"
 
 
-class MIDatasetMongodb(DBMongodb):
-    class Config(BaseSettings):
-        host: str = None
-        db_name: str = "midatasets"
-        collection_name: str = "datasets"
-        primary_key: str = "name"
+if MongoClient:
+    class MIDatasetMongodb(DBMongodb):
+        class Config(BaseSettings):
+            host: str = None
+            db_name: str = "midatasets"
+            collection_name: str = "datasets"
+            primary_key: str = "name"
 
-        class Config:
-            env_prefix = "midatasets_mongo_"
-
+            class Config:
+                env_prefix = "midatasets_mongo_"
+else:
+    MIDatasetMongodb = None
 
 class MIDatasetDBComposite(DBComposite):
     pass
