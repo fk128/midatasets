@@ -84,7 +84,7 @@ class MIReaderBase:
         if spacing is None:
             raise Exception("spacing cannot be None")
 
-        if remote_backend and remote_bucket and remote_prefix:
+        if remote_backend and self.remote_bucket and self.remote_prefix:
             # in case local subdir is different from remote prefix
             if self.remote_prefix:
                 self.remote_dataset_name = self.remote_prefix.replace(
