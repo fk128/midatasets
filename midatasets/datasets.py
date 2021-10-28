@@ -1,3 +1,4 @@
+import datetime
 import os
 from typing import Optional, Dict, Union
 
@@ -56,8 +57,10 @@ class MIDatasetStore:
             pass
         return res
 
-    def update(self, name: str, dataset: MIDatasetModel):
-        return self._db.update(selector={"name": name}, item=dataset)
+    def update(self, name: str, attributes: Dict):
+        if "modified_time" not in attributes:
+            attributes["modified_time"] = datetime.datetime.now().isoformat()
+        return self._db.update(selector={"name": name}, item=attributes)
 
     def get_local_path(self, name: str):
         dataset = self.get_info(name)

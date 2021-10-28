@@ -7,9 +7,11 @@ from typing import Optional, Dict, List
 import boto3
 import yaml
 from botocore.exceptions import ClientError
+
 # from bson import ObjectId
 from loguru import logger
 from pydantic import BaseModel, BaseSettings, Field
+
 try:
     from pymongo import MongoClient
 except:
@@ -66,7 +68,7 @@ class DBBase:
     def create(self, item: BaseModel):
         raise NotImplementedError
 
-    def update(self, selector: Dict, item: BaseModel):
+    def update(self, selector: Dict, item: Dict):
         raise NotImplementedError
 
     def delete(self, selector: Dict):
@@ -103,10 +105,8 @@ if MongoClient:
         def create(self, item: BaseModel):
             return self.collection.insert_one(json.loads(item.json()))
 
-        def update(self, selector, item: BaseModel):
-            return self.collection.replace_one(
-                selector, json.loads(item.json())
-            ).modified_count
+        def update(self, selector, item: Dict):
+            return self.collection.update_one(selector, {"$set": item}).modified_count
 
         def delete(self, selector):
             return self.collection.delete_one(selector).deleted_count
@@ -154,11 +154,11 @@ class DBDict(DBBase):
         else:
             raise KeyError(f"name {getattr(item, self.primary_key)} already exists")
 
-    def update(self, selector, item: BaseModel):
+    def update(self, selector, item: Dict):
         update_count = 0
         for i, d in enumerate(self.data[self.collection_name]):
             if all([d[k] == v for k, v in selector.items()]):
-                self.data[self.collection_name][i] = json.loads(item.json())
+                self.data[self.collection_name][i].update(item)
                 update_count += 1
         if update_count > 0:
             self._save()
@@ -203,7 +203,7 @@ class DBComposite(DBBase):
         logger.info(f"Created using {self.dbs[0].__class__}")
         return self.dbs[0].create(item)
 
-    def update(self, selector, item: BaseModel):
+    def update(self, selector, item: Dict):
         logger.info(f"Updated using {self.dbs[0].__class__}")
         return self.dbs[0].update(selector, item)
 
@@ -272,15 +272,32 @@ class DBDynamodb(DBBase):
         except ClientError as e:
             logger.error(e.response["Error"]["Message"])
         else:
-            return response["Item"]
+            if "Item" in response:
+                return response["Item"]
+            else:
+                raise Exception(f"{selector} does not exist")
 
     def create(self, item: BaseModel):
         response = self.table.put_item(Item=json.loads(item.json()))
         return response
 
-    def update(self, selector: Dict, item: BaseModel):
-        # using put instead of update
-        self.create(item)
+    def update(self, selector: Dict, item: Dict):
+        expression, values = self._get_update_params(item)
+        return self.table.update_item(
+            Key={self.primary_key: selector.get(self.primary_key)},
+            UpdateExpression=expression,
+            ExpressionAttributeValues=dict(values),
+        )
+
+    def _get_update_params(self, body):
+        update_expression = ["set "]
+        update_values = dict()
+
+        for key, val in body.items():
+            update_expression.append(f" {key} = :{key},")
+            update_values[f":{key}"] = val
+
+        return "".join(update_expression)[:-1], update_values
 
     def delete(self, selector: Dict):
         response = self.table.delete_item(Key=selector)
@@ -307,6 +324,7 @@ class MIDatasetDBYaml(DBYaml):
 
 
 if MongoClient:
+
     class MIDatasetMongodb(DBMongodb):
         class Config(BaseSettings):
             host: str = None
@@ -316,8 +334,11 @@ if MongoClient:
 
             class Config:
                 env_prefix = "midatasets_mongo_"
+
+
 else:
     MIDatasetMongodb = None
+
 
 class MIDatasetDBComposite(DBComposite):
     pass
