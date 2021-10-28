@@ -1,6 +1,5 @@
 import logging
 import os
-import sys
 from pathlib import Path
 from typing import Optional, Callable, Union, Tuple, Dict, List
 
@@ -520,17 +519,14 @@ class MIReaderExtended(MIReaderBase):
 
     def generate_resampled(
         self,
-        spacing,
-        parallel=True,
-        num_workers=-1,
-        image_types=None,
-        overwrite=False,
-        cast8bit=False,
+        spacing: float,
+        parallel: bool = True,
+        num_workers: int = -1,
+        image_types: List[str] = None,
+        overwrite: bool = False,
+        cast8bit: bool = False,
     ):
-        def resample(paths, target_spacing):
-            if parallel:
-                # https://github.com/Delgan/loguru/issues/498
-                logger.add(lambda m: sys.stderr.write(m))
+        def resample(paths, target_spacing, logger):
 
             for k, path in paths.items():
                 try:
@@ -584,12 +580,11 @@ class MIReaderExtended(MIReaderBase):
                     logger.exception(f"{k}: {path}")
 
         if parallel:
-            logger.remove()
             Parallel(n_jobs=num_workers)(
-                delayed(resample)(dict(paths), spacing) for paths in self
+                delayed(resample)(dict(paths), spacing, logger) for paths in self
             )
         else:
-            [resample(paths, spacing) for paths in self]
+            [resample(paths, spacing, logger) for paths in self]
 
     def extract_crop(self, i, label=None, vol_size=(64, 64, 64)):
         def get_output(oname):
