@@ -16,7 +16,7 @@ with open('requirements_dev.txt') as requirements_file:
     requirements_dev = requirements_file.read().splitlines()
 
 setup(name='midatasets',
-      version='0.9.10',
+      version='0.10.0',
       description='Medical Image Dataset tools',
       author='F. K.',
       keywords='medical ',
