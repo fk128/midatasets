@@ -31,23 +31,23 @@ except ImportError as e:
 
 class MIReaderBase:
     def __init__(
-        self,
-        spacing,
-        name: str = "reader",
-        is_cropped: bool = False,
-        crop_size: int = 64,
-        dir_path: Optional[str] = None,
-        ext: str = (".nii.gz",),
-        label: Optional[str] = None,
-        images_only: bool = False,
-        label_mappings: Optional[Dict[str, Dict]] = None,
-        remote_bucket: Optional[str] = None,
-        remote_profile: Optional[str] = None,
-        remote_prefix: Optional[str] = None,
-        remote_backend: Optional[Union[Callable, str]] = DatasetS3Backend,
-        fail_on_error: bool = False,
-        dropna: bool = True,
-        **kwargs,
+            self,
+            spacing,
+            name: str = "reader",
+            is_cropped: bool = False,
+            crop_size: int = 64,
+            dir_path: Optional[str] = None,
+            ext: str = (".nii.gz",),
+            label: Optional[str] = None,
+            images_only: bool = False,
+            label_mappings: Optional[Dict[str, Dict]] = None,
+            remote_bucket: Optional[str] = None,
+            remote_profile: Optional[str] = None,
+            remote_prefix: Optional[str] = None,
+            remote_backend: Optional[Union[Callable, str]] = DatasetS3Backend,
+            fail_on_error: bool = False,
+            dropna: bool = True,
+            **kwargs,
     ):
 
         self.label_mappings = label_mappings
@@ -179,12 +179,26 @@ class MIReaderBase:
         else:
             return self.local_backend.list_dirs()
 
+    def upload(self, path: str, key: str):
+        subprefix: Optional[str] = None
+        for d in get_configs().data_types:
+            if key.startswith(d["name"]):
+                subprefix = d["dirname"]
+                if "/" in key:
+                    subprefix = f'{subprefix}/{key.split("/", 1)[1]}'
+                break
+        if subprefix is None:
+            raise TypeError("Invalid data type")
+
+        self.remote_backend.upload(path=path, subprefix=subprefix, spacing=self.spacing)
+
+
     def download(
-        self,
-        max_images: Optional[int] = None,
-        dryrun: bool = False,
-        include: Optional[List[str]] = None,
-        **kwargs,
+            self,
+            max_images: Optional[int] = None,
+            dryrun: bool = False,
+            include: Optional[List[str]] = None,
+            **kwargs,
     ):
         """
         download images using remote backend
@@ -273,7 +287,7 @@ class MIReaderBase:
         return get_spacing_dirname(spacing)
 
     def get_imagetype_path(
-        self, images_type: str, crop_suffix: str = "_crop", split=False
+            self, images_type: str, crop_suffix: str = "_crop", split=False
     ):
 
         suffix = ""
@@ -338,11 +352,11 @@ class MIReaderExtended(MIReaderBase):
             return self._load_image_by_name(img_idx)
 
     def load_image_and_resample(
-        self,
-        img_idx: int,
-        new_spacing: Union[int, float],
-        key: Optional[str] = None,
-        nearest: bool = False,
+            self,
+            img_idx: int,
+            new_spacing: Union[int, float],
+            key: Optional[str] = None,
+            nearest: bool = False,
     ):
         key = key or self.image_key
         image_path = self.dataframe.iloc[img_idx][f"{key}_path"]
@@ -427,12 +441,12 @@ class MIReaderExtended(MIReaderBase):
         )
 
     def extract_random_class_balanced_subvolume(
-        self,
-        img_idx,
-        subvol_size=(64, 64, 64),
-        num=2,
-        class_weights=(1, 1),
-        num_labels=2,
+            self,
+            img_idx,
+            subvol_size=(64, 64, 64),
+            num=2,
+            class_weights=(1, 1),
+            num_labels=2,
     ):
 
         return midatasets.preprocessing.extract_class_balanced_example_array(
@@ -518,13 +532,13 @@ class MIReaderExtended(MIReaderBase):
         return slices
 
     def generate_resampled(
-        self,
-        spacing: float,
-        parallel: bool = True,
-        num_workers: int = -1,
-        image_types: List[str] = None,
-        overwrite: bool = False,
-        cast8bit: bool = False,
+            self,
+            spacing: float,
+            parallel: bool = True,
+            num_workers: int = -1,
+            image_types: List[str] = None,
+            overwrite: bool = False,
+            cast8bit: bool = False,
     ):
         def resample(paths, target_spacing, logger):
 

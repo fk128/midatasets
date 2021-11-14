@@ -75,6 +75,9 @@ class DatasetStorageBackendBase:
     ):
         raise NotImplementedError
 
+    def upload(self, path: str, subprefix: str, spacing: Optional[Union[float, int]] = 0, overwrite: bool = False):
+        raise NotImplementedError
+
 
 class DatasetS3Backend(DatasetStorageBackendBase):
     client = None
@@ -215,11 +218,29 @@ class DatasetS3Backend(DatasetStorageBackendBase):
                 if not dryrun:
                     bucket.download_file(file_prefix, target)
 
+    def upload(self, path: str, subprefix: str, spacing: Optional[Union[float, int]] = 0, overwrite: bool = False):
+
+        spacing_dir = get_spacing_dirname(spacing)
+        name = Path(path).name
+        prefix = f"{self.prefix}/{subprefix}/{spacing_dir}/{name}"
+        if not overwrite:
+            try:
+                self.client.head_object(Bucket=self.bucket, Key=prefix)
+                logger.info(
+                    f's3://{self.bucket}/{prefix} Exists. Skipping. Pass `overwrite=True` if you want to overwrite.')
+                return
+            except:
+                pass
+
+        self.client.upload_file(str(path), self.bucket, prefix)
+        logger.info(f'Uploaded to s3://{self.bucket}/{prefix}')
+
 
 class DatasetLocalBackend(DatasetStorageBackendBase):
     def __init__(self, root_path=None, **kwargs):
         super().__init__()
         self.root_path = root_path or kwargs.get("dir_path", None)
+        Path(self.root_path).mkdir(exist_ok=True, parents=True)
         if self.root_path is None:
             raise Exception("Missing root_path or dir_path")
         self.image_type_dirs = set()
