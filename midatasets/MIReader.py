@@ -544,7 +544,7 @@ class MIReaderExtended(MIReaderBase):
 
             for k, path in paths.items():
                 try:
-                    image_type = k.split("/")[0]
+                    image_type = k.replace("_path", "")
                     if image_types and image_type not in image_types:
                         continue
                     if not isinstance(path, str) or not path.endswith(".nii.gz"):
@@ -594,7 +594,7 @@ class MIReaderExtended(MIReaderBase):
                     logger.exception(f"{k}: {path}")
 
         if parallel:
-            Parallel(n_jobs=num_workers)(
+            Parallel(n_jobs=num_workers, backend="threading")(
                 delayed(resample)(dict(paths), spacing, logger) for paths in self
             )
         else:
