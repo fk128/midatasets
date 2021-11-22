@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-__version__ = "0.10.1"
+__version__ = "0.11.0"
 
 import os
 from typing import Optional, Dict, List
