@@ -72,6 +72,7 @@ class DatasetStorageBackendBase:
             ext: str = ".nii.gz",
             dryrun: bool = False,
             include: Optional[Tuple[str, ...]] = None,
+            names: Optional[List[str]] = None
     ):
         raise NotImplementedError
 
@@ -175,6 +176,13 @@ class DatasetS3Backend(DatasetStorageBackendBase):
         else:
             return files
 
+    @staticmethod
+    def _is_in_names(path, names):
+        for name in names:
+            if name in path:
+                return True
+        return False
+
     def download(
             self,
             dest_path,
@@ -184,7 +192,11 @@ class DatasetS3Backend(DatasetStorageBackendBase):
             ext: Tuple[str, ...] = (".nii.gz",),
             dryrun=False,
             include=None,
+            names: Optional[List[str]] = None
     ):
+        if names:
+            names = set(names)
+
         if src_prefix is None:
             src_prefix = str(Path(self.prefix)) + "/"
         dest_path = Path(dest_path)
@@ -202,6 +214,8 @@ class DatasetS3Backend(DatasetStorageBackendBase):
             count += 1
             for k, file_path in file_paths.items():
                 if include and k not in include:
+                    continue
+                if names and not self._is_in_names(file_path["path"], names):
                     continue
 
                 file_prefix = file_path["path"].replace(f"s3://{self.bucket}/", "")
