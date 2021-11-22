@@ -153,22 +153,24 @@ class MIReaderBase:
             return metadata
         return None
 
-    def list_files(self, remote: bool = False, grouped: bool = True):
+    def list_files(self, remote: bool = False, grouped: bool = True, spacing: Optional[float] = None):
         """
         list files locally or remotely
         :param remote:
         :param grouped:
         :return:
         """
+        if spacing is None:
+            spacing = self.spacing
         if remote:
             return self.remote_backend.list_files(
-                spacing=self.spacing,
+                spacing=spacing,
                 ext=self.ext,
                 grouped=grouped,
             )
         else:
             return self.local_backend.list_files(
-                spacing=self.spacing,
+                spacing=spacing,
                 ext=self.ext,
                 grouped=grouped,
             )
@@ -192,13 +194,17 @@ class MIReaderBase:
 
         self.remote_backend.upload(path=path, subprefix=subprefix, spacing=self.spacing)
 
+    def list_names(self):
+        data = self.remote_backend.list_files(spacing=0, grouped=True)
+        return list(data['native'].keys())
 
     def download(
             self,
             max_images: Optional[int] = None,
             dryrun: bool = False,
             include: Optional[List[str]] = None,
-            **kwargs,
+            spacing: Optional[float] = None,
+            **kwargs
     ):
         """
         download images using remote backend
@@ -207,9 +213,12 @@ class MIReaderBase:
         :param dryrun:
         :return:
         """
+        if spacing is None:
+            spacing = self.spacing
+
         self.remote_backend.download(
             dest_path=self.dir_path,
-            spacing=self.spacing,
+            spacing=spacing,
             ext=self.ext,
             include=include,
             dryrun=dryrun,
@@ -536,28 +545,44 @@ class MIReaderExtended(MIReaderBase):
             spacing: float,
             parallel: bool = True,
             num_workers: int = -1,
+            from_spacing: Optional[float] = None,
             image_types: List[str] = None,
             overwrite: bool = False,
             cast8bit: bool = False,
+            names: Optional[List[str]] = None
     ):
-        def resample(paths, target_spacing, logger):
+        if names:
+            names = set(names)
 
-            for k, path in paths.items():
+        if from_spacing is None:
+            from_spacing = self.spacing
+
+        files = self.list_files(grouped=True, spacing=from_spacing)
+        files = next(iter(files.values()))
+
+        data = {}
+        for name, images in files.items():
+            if not names or name in names:
+                data[name] = {k: v["path"] for k, v in images.items()}
+
+        def resample(paths, src_spacing, target_spacing, logger):
+
+            for image_type, path in paths.items():
                 try:
-                    image_type = k.replace("_path", "")
+
                     if image_types and image_type not in image_types:
                         continue
                     if not isinstance(path, str) or not path.endswith(".nii.gz"):
                         continue
 
                     output_path = path.replace(
-                        get_spacing_dirname(0),
+                        get_spacing_dirname(src_spacing),
                         ("8bit" if cast8bit else "")
                         + get_spacing_dirname(target_spacing),
                     )
                     if Path(output_path).exists() and not overwrite:
                         logger.info(
-                            f"[{k}/{get_spacing_dirname(target_spacing)}/{Path(output_path).name}] already exists"
+                            f"[{image_type}/{get_spacing_dirname(target_spacing)}/{Path(output_path).name}] already exists"
                         )
                         continue
                     Path(output_path).parent.mkdir(exist_ok=True, parents=True)
@@ -591,14 +616,13 @@ class MIReaderExtended(MIReaderBase):
 
                     sitk.WriteImage(sitk_image, output_path)
                 except:
-                    logger.exception(f"{k}: {path}")
+                    logger.exception(f"{image_type}: {path}")
 
         if parallel:
-            Parallel(n_jobs=num_workers, backend="threading")(
-                delayed(resample)(dict(paths), spacing, logger) for paths in self
-            )
+            tasks = [delayed(resample)(dict(paths), from_spacing, spacing, logger) for paths in data.values()]
+            Parallel(n_jobs=num_workers, backend="threading")(tasks)
         else:
-            [resample(paths, spacing, logger) for paths in self]
+            [resample(paths, from_spacing, spacing, logger) for paths in data.values()]
 
     def extract_crop(self, i, label=None, vol_size=(64, 64, 64)):
         def get_output(oname):
