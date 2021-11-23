@@ -195,7 +195,7 @@ class MIReaderBase:
         self.remote_backend.upload(path=path, subprefix=subprefix, spacing=self.spacing)
 
     def list_names(self):
-        data = self.remote_backend.list_files(spacing=0, grouped=True)
+        data = self.remote_backend.list_files(spacing=0, grouped=True, data_types=["image"])
         return list(data['native'].keys())
 
     def download(
