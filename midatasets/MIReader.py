@@ -225,7 +225,8 @@ class MIReaderBase:
             max_images=max_images,
             **kwargs,
         )
-        self.setup()
+        if spacing == self.spacing:
+            self.setup()
 
     def setup(self):
         if self.dir_path is None:
