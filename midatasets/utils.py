@@ -269,6 +269,7 @@ def parse_filepaths(filepaths: List, root_prefix: str):
                                  'filename': filename,
                                  'key': image_key,
                                  'prefix': prefix,
+                                 'last_modified': file.get('last_modified', None),
                                  'data_type': data_type})
     return parsed_filepaths
 

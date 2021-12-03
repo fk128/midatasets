@@ -140,15 +140,16 @@ class DatasetS3Backend(DatasetStorageBackendBase):
         for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
             result = page.get("Contents", None)
             if result:
-                result = [r["Key"] for r in result]
+                result = {r["Key"]: r for r in result}
                 if pattern:
-                    result = fnmatch.filter(result, pattern)
+                    result = [result[k] for k in fnmatch.filter(result.keys(), pattern)]
                 results += [
                     {
-                        "path": f"s3://{self.bucket}/{r}"
+                        "path": f"s3://{self.bucket}/{r['Key']}",
+                        "last_modified": r['LastModified']
                     }
                     for r in result
-                    if r.endswith(ext)
+                    if r['Key'].endswith(ext)
                 ]
         return results
 
