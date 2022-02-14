@@ -282,22 +282,25 @@ class DBDynamodb(DBBase):
         return response
 
     def update(self, selector: Dict, item: Dict):
-        expression, values = self._get_update_params(item)
+        expression, names, values = self._get_update_params(item)
         return self.table.update_item(
             Key={self.primary_key: selector.get(self.primary_key)},
             UpdateExpression=expression,
             ExpressionAttributeValues=dict(values),
+            ExpressionAttributeNames=dict(names),
         )
 
     def _get_update_params(self, body):
         update_expression = ["set "]
         update_values = dict()
+        update_names = dict()
 
         for key, val in body.items():
-            update_expression.append(f" {key} = :{key},")
-            update_values[f":{key}"] = val
+            update_expression.append(f" #{key} = :v{key},")
+            update_values[f":v{key}"] = val
+            update_names[f"#{key}"] = key
 
-        return "".join(update_expression)[:-1], update_values
+        return "".join(update_expression)[:-1], update_names, update_values
 
     def delete(self, selector: Dict):
         response = self.table.delete_item(Key=selector)
