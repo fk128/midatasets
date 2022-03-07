@@ -1,4 +1,5 @@
 import fnmatch
+import itertools
 import os
 from pathlib import Path
 from typing import Callable, Union, Optional, Tuple, List
@@ -18,19 +19,24 @@ class DatasetStorageBackendBase:
         raise NotImplementedError
 
     def list_files_at_dir(
-            self,
-            sub_path: Optional[str] = None,
-            pattern: Optional[str] = None,
-            ext: Union[Tuple[str], str] = (".nii.gz",),
+        self,
+        sub_path: Optional[str] = None,
+        pattern: Optional[str] = None,
+        ext: Union[Tuple[str], str] = (".nii.gz",),
+        skip: int = 0,
+        limit: int = -1,
     ):
         raise NotImplementedError
 
     def list_files(
-            self,
-            spacing: Optional[Union[float, int]] = None,
-            ext: Tuple[str] = (".nii.gz",),
-            data_types: Optional[List[str]] = None,
-            grouped: bool = False,
+        self,
+        spacing: Optional[Union[float, int]] = None,
+        ext: Tuple[str] = (".nii.gz",),
+        data_types: Optional[List[str]] = None,
+        grouped: bool = False,
+        skip: int = 0,
+        limit: int = -1,
+        primary_key: str = "image",
     ):
         raise NotImplementedError
 
@@ -57,26 +63,32 @@ class DatasetStorageBackendBase:
         if configs.primary_type in data_types:
             data_types.remove(configs.primary_type)
             data_types = [
-                             configs.primary_type
-                         ] + data_types  # make sure images key is first
+                configs.primary_type
+            ] + data_types  # make sure images key is first
         return [
             {"name": name, "dirname": datatype_to_dirname[name]} for name in data_types
         ]
 
     def download(
-            self,
-            dest_path: str,
-            src_prefix: Optional[str] = None,
-            spacing: Optional[Union[float, int]] = 0,
-            max_images: Optional[int] = None,
-            ext: str = ".nii.gz",
-            dryrun: bool = False,
-            include: Optional[Tuple[str, ...]] = None,
-            names: Optional[List[str]] = None
+        self,
+        dest_path: str,
+        src_prefix: Optional[str] = None,
+        spacing: Optional[Union[float, int]] = 0,
+        max_images: Optional[int] = None,
+        ext: str = ".nii.gz",
+        dryrun: bool = False,
+        include: Optional[Tuple[str, ...]] = None,
+        names: Optional[List[str]] = None,
     ):
         raise NotImplementedError
 
-    def upload(self, path: str, subprefix: str, spacing: Optional[Union[float, int]] = 0, overwrite: bool = False):
+    def upload(
+        self,
+        path: str,
+        subprefix: str,
+        spacing: Optional[Union[float, int]] = 0,
+        overwrite: bool = False,
+    ):
         raise NotImplementedError
 
 
@@ -92,8 +104,8 @@ class DatasetS3Backend(DatasetStorageBackendBase):
         self.root_path = f"s3://{os.path.join(self.bucket, self.prefix)}"
 
         if (
-                "AWS_SECRET_ACCESS_KEY" not in os.environ
-                and "AWS_ACCESS_KEY_ID" not in os.environ
+            "AWS_SECRET_ACCESS_KEY" not in os.environ
+            and "AWS_ACCESS_KEY_ID" not in os.environ
         ):
             boto3.setup_default_session(profile_name=self.profile)
 
@@ -124,11 +136,13 @@ class DatasetS3Backend(DatasetStorageBackendBase):
         }
 
     def list_files_at_dir(
-            self,
-            sub_path: Optional[str] = None,
-            pattern: Optional[str] = None,
-            ext: Union[Tuple[str], str] = (".nii.gz",),
-            recursive: bool = False
+        self,
+        sub_path: Optional[str] = None,
+        pattern: Optional[str] = None,
+        ext: Union[Tuple[str], str] = (".nii.gz",),
+        recursive: bool = False,
+        skip: int = 0,
+        limit: int = -1,
     ):
         prefix = self.prefix
         if sub_path:
@@ -137,7 +151,20 @@ class DatasetS3Backend(DatasetStorageBackendBase):
             prefix += "/"
         paginator = self.client.get_paginator("list_objects_v2")
         results = []
-        for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
+        if limit > -1:
+            pages = itertools.islice(
+                paginator.paginate(
+                    Bucket=self.bucket,
+                    Prefix=prefix,
+                    PaginationConfig={"PageSize": limit},
+                ),
+                skip,
+                skip + 1,
+            )
+        else:
+            pages = paginator.paginate(Bucket=self.bucket, Prefix=prefix)
+
+        for page in pages:
             result = page.get("Contents", None)
             if result:
                 result = {r["Key"]: r for r in result}
@@ -146,19 +173,23 @@ class DatasetS3Backend(DatasetStorageBackendBase):
                 results += [
                     {
                         "path": f"s3://{self.bucket}/{r['Key']}",
-                        "last_modified": r['LastModified']
+                        "last_modified": r["LastModified"],
+                        "size": r["Size"],
                     }
                     for r in result
-                    if r['Key'].endswith(ext)
+                    if r["Key"].endswith(ext)
                 ]
         return results
 
     def list_files(
-            self,
-            spacing: Optional[Union[float, int]] = None,
-            data_types: Optional[List[str]] = None,
-            ext: Union[Tuple[str, ...], str] = (".nii.gz",),
-            grouped: bool = False,
+        self,
+        spacing: Optional[Union[float, int]] = None,
+        data_types: Optional[List[str]] = None,
+        ext: Union[Tuple[str, ...], str] = (".nii.gz",),
+        grouped: bool = False,
+        skip: int = 0,
+        limit: int = -1,
+        primary_key: str = "image",
     ):
         if not isinstance(ext, tuple):
             ext = (ext,)
@@ -168,12 +199,26 @@ class DatasetS3Backend(DatasetStorageBackendBase):
         pattern = f"*/{get_spacing_dirname(spacing)}/*" if spacing is not None else "*"
         files = {}
         for data_type in data_types:
+
             files[data_type["name"]] = self.list_files_at_dir(
-                sub_path=data_type["dirname"], pattern=pattern, ext=ext
+                sub_path=data_type["dirname"],
+                pattern=pattern,
+                ext=ext,
+                skip=skip,
+                limit=limit,
             )
 
         if grouped:
-            return grouped_files(files, root_prefix=self.root_path)
+            files = grouped_files(files, root_prefix=self.root_path)
+
+        if limit > -1:
+            total = sum(
+                1
+                for _ in boto3.resource("s3")
+                .Bucket(self.bucket)
+                .objects.filter(Prefix=f"{self.prefix}/{primary_key}")
+            )
+            return {"total": total, "data": files, "limit": limit, "skip": skip}
         else:
             return files
 
@@ -185,15 +230,15 @@ class DatasetS3Backend(DatasetStorageBackendBase):
         return False
 
     def download(
-            self,
-            dest_path,
-            src_prefix: Optional[str] = None,
-            spacing: Optional[Union[float, int]] = 0,
-            max_images=None,
-            ext: Tuple[str, ...] = (".nii.gz",),
-            dryrun=False,
-            include=None,
-            names: Optional[List[str]] = None
+        self,
+        dest_path,
+        src_prefix: Optional[str] = None,
+        spacing: Optional[Union[float, int]] = 0,
+        max_images=None,
+        ext: Tuple[str, ...] = (".nii.gz",),
+        dryrun=False,
+        include=None,
+        names: Optional[List[str]] = None,
     ):
         if names:
             names = set(names)
@@ -233,7 +278,13 @@ class DatasetS3Backend(DatasetStorageBackendBase):
                 if not dryrun:
                     bucket.download_file(file_prefix, target)
 
-    def upload(self, path: str, subprefix: str, spacing: Optional[Union[float, int]] = 0, overwrite: bool = False):
+    def upload(
+        self,
+        path: str,
+        subprefix: str,
+        spacing: Optional[Union[float, int]] = 0,
+        overwrite: bool = False,
+    ):
 
         spacing_dir = get_spacing_dirname(spacing)
         name = Path(path).name
@@ -242,13 +293,14 @@ class DatasetS3Backend(DatasetStorageBackendBase):
             try:
                 self.client.head_object(Bucket=self.bucket, Key=prefix)
                 logger.info(
-                    f's3://{self.bucket}/{prefix} Exists. Skipping. Pass `overwrite=True` if you want to overwrite.')
+                    f"s3://{self.bucket}/{prefix} Exists. Skipping. Pass `overwrite=True` if you want to overwrite."
+                )
                 return
             except:
                 pass
 
         self.client.upload_file(str(path), self.bucket, prefix)
-        logger.info(f'Uploaded to s3://{self.bucket}/{prefix}')
+        logger.info(f"Uploaded to s3://{self.bucket}/{prefix}")
 
 
 class DatasetLocalBackend(DatasetStorageBackendBase):
@@ -272,17 +324,23 @@ class DatasetLocalBackend(DatasetStorageBackendBase):
         return str(Path(self.root_path))
 
     def list_files_at_dir(
-            self,
-            sub_path: Optional[str] = None,
-            pattern: Optional[str] = None,
-            ext: Union[Tuple[str], str] = (".nii.gz",),
-            recursive: bool = False,
+        self,
+        sub_path: Optional[str] = None,
+        pattern: Optional[str] = None,
+        ext: Union[Tuple[str], str] = (".nii.gz",),
+        recursive: bool = False,
+        skip: int = 0,
+        limit: int = -1,
     ):
         path = Path(self.root_path)
         if sub_path:
             path /= sub_path
 
-        files = [str(f) for f in path.glob(f"*")] if not recursive else [str(f) for f in path.rglob(f"*")]
+        files = (
+            [str(f) for f in path.glob(f"*")]
+            if not recursive
+            else [str(f) for f in path.rglob(f"*")]
+        )
 
         # filter only matching spacing
         if pattern:
@@ -291,11 +349,14 @@ class DatasetLocalBackend(DatasetStorageBackendBase):
         return [{"path": f} for f in files if f.endswith(ext)]
 
     def list_files(
-            self,
-            spacing: Optional[Union[float, int]] = None,
-            data_types: Optional[List[str]] = None,
-            ext: Tuple[str] = (".nii.gz",),
-            grouped=False,
+        self,
+        spacing: Optional[Union[float, int]] = None,
+        data_types: Optional[List[str]] = None,
+        ext: Tuple[str] = (".nii.gz",),
+        grouped=False,
+        skip: int = 0,
+        limit: int = -1,
+        primary_key: str = "image",
     ):
         if not isinstance(ext, tuple):
             ext = (ext,)
@@ -316,10 +377,7 @@ class DatasetLocalBackend(DatasetStorageBackendBase):
             # filter only matching spacing
             if spacing is not None:
                 files_iter = fnmatch.filter(files_iter, pattern)
-            files[data_type["name"]] = [
-                {"path": f}
-                for f in files_iter
-            ]
+            files[data_type["name"]] = [{"path": f} for f in files_iter]
 
         if grouped:
             return grouped_files(files, root_prefix=str(dataset_path))
@@ -331,7 +389,7 @@ BACKENDS = {"s3": DatasetS3Backend, "local": DatasetLocalBackend}
 
 
 def get_backend(
-        name: Union[str, Callable[..., DatasetStorageBackendBase]]
+    name: Union[str, Callable[..., DatasetStorageBackendBase]]
 ) -> Callable[..., DatasetStorageBackendBase]:
     if callable(name):
         return name
