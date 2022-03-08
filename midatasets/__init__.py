@@ -29,12 +29,13 @@ class Configs(BaseSettings):
     aws_s3_profile: Optional[str] = None
     remap_dirs: Dict = {"images": "image", "labelmaps": "labelmap"}
     primary_type: str = "image"
-    data_types: List[Dict] = [{"dirname": "images", "name": "image"},
-                              {"dirname": "labelmaps", "name": "labelmap"},
-                              {"dirname": "previews", "name": "preview"},
-                              {"dirname": "outputs", "name": "output"},
-                              {"dirname": "metadata", "name": "metadata"},
-                              ]
+    data_types: List[Dict] = [
+        {"dirname": "images", "name": "image"},
+        {"dirname": "labelmaps", "name": "labelmap"},
+        {"dirname": "previews", "name": "preview"},
+        {"dirname": "outputs", "name": "output"},
+        {"dirname": "metadata", "name": "metadata"},
+    ]
     database: str = "yaml"
 
     class Config:

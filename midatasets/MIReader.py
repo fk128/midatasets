@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from typing import Optional, Callable, Union, Tuple, Dict, List
 
+import boto3
 import pandas as pd
 import yaml
 from loguru import logger
@@ -32,23 +33,23 @@ except ImportError as e:
 
 class MIReaderBase:
     def __init__(
-            self,
-            spacing,
-            name: str = "reader",
-            is_cropped: bool = False,
-            crop_size: int = 64,
-            dir_path: Optional[str] = None,
-            ext: str = (".nii.gz",),
-            label: Optional[str] = None,
-            images_only: bool = False,
-            label_mappings: Optional[Dict[str, Dict]] = None,
-            remote_bucket: Optional[str] = None,
-            remote_profile: Optional[str] = None,
-            remote_prefix: Optional[str] = None,
-            remote_backend: Optional[Union[Callable, str]] = DatasetS3Backend,
-            fail_on_error: bool = False,
-            dropna: bool = True,
-            **kwargs,
+        self,
+        spacing,
+        name: str = "reader",
+        is_cropped: bool = False,
+        crop_size: int = 64,
+        dir_path: Optional[str] = None,
+        ext: str = (".nii.gz",),
+        label: Optional[str] = None,
+        images_only: bool = False,
+        label_mappings: Optional[Dict[str, Dict]] = None,
+        remote_bucket: Optional[str] = None,
+        remote_profile: Optional[str] = None,
+        remote_prefix: Optional[str] = None,
+        remote_backend: Optional[Union[Callable, str]] = DatasetS3Backend,
+        fail_on_error: bool = False,
+        dropna: bool = True,
+        **kwargs,
     ):
 
         self.label_mappings = label_mappings or {}
@@ -80,6 +81,7 @@ class MIReaderBase:
         self.remote_bucket = remote_bucket
         self.remote_profile = remote_profile
         self.remote_prefix = remote_prefix
+        self._valid_keys = None
         self._deprecated_check(**kwargs)
 
         self.local_backend = DatasetLocalBackend(root_path=self.dir_path)
@@ -151,6 +153,26 @@ class MIReaderBase:
         """
         return len(self.dataframe)
 
+    @property
+    def valid_keys(self):
+        if self._valid_keys is None:
+            self._valid_keys = set()
+            for remote in [True, False]:
+                try:
+                    data = next(
+                        iter(
+                            self.list_files(
+                                remote=remote, grouped=True, data_types=None
+                            ).values()
+                        )
+                    )
+
+                    for v in data.values():
+                        self._valid_keys.update(list(v.keys()))
+                except Exception as e:
+                    logger.warning(e)
+        return self._valid_keys
+
     def get_root_path(self):
         return get_configs().root_path
 
@@ -163,10 +185,11 @@ class MIReaderBase:
         return None
 
     def list_files(
-            self,
-            remote: bool = False,
-            grouped: bool = True,
-            spacing: Optional[float] = None,
+        self,
+        remote: bool = False,
+        grouped: bool = True,
+        spacing: Optional[float] = None,
+        data_types: Optional[List[str]] = None,
     ):
         """
         list files locally or remotely
@@ -178,15 +201,11 @@ class MIReaderBase:
             spacing = self.spacing
         if remote:
             return self.remote_backend.list_files(
-                spacing=spacing,
-                ext=self.ext,
-                grouped=grouped,
+                spacing=spacing, ext=self.ext, grouped=grouped, data_types=data_types
             )
         else:
             return self.local_backend.list_files(
-                spacing=spacing,
-                ext=self.ext,
-                grouped=grouped,
+                spacing=spacing, ext=self.ext, grouped=grouped, data_types=data_types
             )
 
     def list_image_types(self, remote: bool = False):
@@ -215,12 +234,12 @@ class MIReaderBase:
         return list(data["native"].keys())
 
     def download(
-            self,
-            max_images: Optional[int] = None,
-            dryrun: bool = False,
-            include: Optional[List[str]] = None,
-            spacing: Optional[float] = None,
-            **kwargs,
+        self,
+        max_images: Optional[int] = None,
+        dryrun: bool = False,
+        include: Optional[List[str]] = None,
+        spacing: Optional[float] = None,
+        **kwargs,
     ):
         """
         download images using remote backend
@@ -333,7 +352,7 @@ class MIReaderBase:
         return get_spacing_dirname(spacing)
 
     def get_imagetype_path(
-            self, images_type: str, crop_suffix: str = "_crop", split=False
+        self, images_type: str, crop_suffix: str = "_crop", split=False
     ):
 
         suffix = ""
@@ -398,11 +417,11 @@ class MIReaderExtended(MIReaderBase):
             return self._load_image_by_name(img_idx)
 
     def load_image_and_resample(
-            self,
-            img_idx: int,
-            new_spacing: Union[int, float],
-            key: Optional[str] = None,
-            nearest: bool = False,
+        self,
+        img_idx: int,
+        new_spacing: Union[int, float],
+        key: Optional[str] = None,
+        nearest: bool = False,
     ):
         key = key or self.image_key
         image_path = self.dataframe.iloc[img_idx][f"{key}_path"]
@@ -487,12 +506,12 @@ class MIReaderExtended(MIReaderBase):
         )
 
     def extract_random_class_balanced_subvolume(
-            self,
-            img_idx,
-            subvol_size=(64, 64, 64),
-            num=2,
-            class_weights=(1, 1),
-            num_labels=2,
+        self,
+        img_idx,
+        subvol_size=(64, 64, 64),
+        num=2,
+        class_weights=(1, 1),
+        num_labels=2,
     ):
 
         return midatasets.preprocessing.extract_class_balanced_example_array(
@@ -578,15 +597,15 @@ class MIReaderExtended(MIReaderBase):
         return slices
 
     def generate_resampled(
-            self,
-            spacing: float,
-            parallel: bool = True,
-            num_workers: int = -1,
-            from_spacing: Optional[float] = None,
-            image_types: List[str] = None,
-            overwrite: bool = False,
-            cast8bit: bool = False,
-            names: Optional[List[str]] = None,
+        self,
+        spacing: float,
+        parallel: bool = True,
+        num_workers: int = -1,
+        from_spacing: Optional[float] = None,
+        image_types: List[str] = None,
+        overwrite: bool = False,
+        cast8bit: bool = False,
+        names: Optional[List[str]] = None,
     ):
         if names:
             names = set(names)
@@ -761,4 +780,66 @@ if sitk:
 else:
     MIReader = MIReaderBase
 
-__all__ = [MIReader]
+
+class MImage:
+    def __init__(self, name, bucket, prefix, local_dir: str = "/tmp"):
+        self.name = name
+        self.bucket = bucket
+        self.prefix = prefix
+        self.local_dir = local_dir
+
+    @property
+    def local_path(self):
+        return str(Path(f"{self.local_dir}/{self.prefix}"))
+
+    @property
+    def s3_path(self):
+        return f"s3://{self.bucket}/{self.prefix}"
+
+    def download(self, overwrite: bool = False):
+
+        s3 = boto3.resource("s3")
+        bucket = s3.Bucket(self.bucket)
+
+        target = Path(self.local_path)
+        if target.exists() and not overwrite:
+            logger.info(f"[already exists] {target}, skipping download.")
+            return
+        if not target.parent.exists():
+            target.parent.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"[Downloading] {self.s3_path} -> {target}")
+        bucket.download_file(self.prefix, str(target))
+
+    def delete(self):
+        try:
+            os.remove(self.local_path)
+            logger.info(f"[Removed] {self.local_path}")
+        except Exception as e:
+            logger.warning(e)
+
+
+class MImageIterator:
+    def __init__(self, dataset: MIReader, key: str, remote: bool = True):
+
+        self.dataset = dataset
+        self.key = key
+        self.data = next(
+            iter(self.dataset.list_files(remote=remote, grouped=True).values())
+        )
+        self.names = list(self.data.keys())
+
+    def __getitem__(self, index) -> MImage:
+        name = self.names[index]
+        return MImage(
+            name=name,
+            prefix=f'{self.dataset.remote_prefix}/{self.data[name][self.key]["prefix"]}',
+            bucket=self.dataset.remote_bucket,
+            local_dir=self.dataset.dir_path.replace(self.dataset.remote_prefix, ""),
+        )
+
+    def __len__(self):
+        return len(self.data)
+
+
+__all__ = [MIReader, MImage, MImageIterator]
