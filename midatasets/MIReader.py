@@ -827,7 +827,9 @@ class MImageIterator:
         self.data = next(
             iter(self.dataset.list_files(remote=remote, grouped=True).values())
         )
+        self.data = { name: value for name, value in self.data.items() if key in value}
         self.names = list(self.data.keys())
+       
 
     def __getitem__(self, index) -> MImage:
         name = self.names[index]
