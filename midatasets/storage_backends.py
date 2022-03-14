@@ -169,16 +169,20 @@ class DatasetS3Backend(DatasetStorageBackendBase):
             if result:
                 result = {r["Key"]: r for r in result}
                 if pattern:
-                    result = [result[k] for k in fnmatch.filter(result.keys(), pattern)]
-                results += [
-                    {
-                        "path": f"s3://{self.bucket}/{r['Key']}",
-                        "last_modified": r["LastModified"],
-                        "size": r["Size"],
+                    result = {
+                        k: result[k] for k in fnmatch.filter(result.keys(), pattern)
                     }
-                    for r in result
-                    if r["Key"].endswith(ext)
-                ]
+                for k, v in result.items():
+                    if ext and not v["Key"].endswith(ext):
+                        continue
+
+                    results.append(
+                        {
+                            "path": f"s3://{self.bucket}/{k}",
+                            "last_modified": v["LastModified"],
+                            "size": v["Size"],
+                        }
+                    )
         return results
 
     def list_files(

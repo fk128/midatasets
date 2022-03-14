@@ -226,7 +226,7 @@ def strip_extension(path):
     path = Path(path)
     remove = []
     for e in path.suffixes:
-        if e in {'.jpg', '.jpeg', '.nii', 'gz', '.json', '.yaml'}:
+        if e in {'.jpg', '.jpeg', '.nii', '.gz', '.json', '.yaml'}:
             remove.append(e)
 
     return str(path).rstrip(''.join(path.suffixes))
