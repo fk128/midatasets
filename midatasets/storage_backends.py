@@ -1,8 +1,9 @@
 import fnmatch
 import itertools
 import os
+from collections import defaultdict
 from pathlib import Path
-from typing import Callable, Union, Optional, Tuple, List
+from typing import Callable, Union, Optional, Tuple, List, Iterable
 
 import boto3
 import botocore

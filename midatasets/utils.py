@@ -22,7 +22,9 @@ from loguru import logger
 from midatasets import configs
 
 
-def printProgressBar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█'):
+def printProgressBar(
+    iteration, total, prefix="", suffix="", decimals=1, length=100, fill="█"
+):
     """
     Call in a loop to create terminal progress bar
     @params:
@@ -36,8 +38,8 @@ def printProgressBar(iteration, total, prefix='', suffix='', decimals=1, length=
     """
     percent = ("0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
     filledLength = int(length * iteration // total)
-    bar = fill * filledLength + '-' * (length - filledLength)
-    print('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end='\r')
+    bar = fill * filledLength + "-" * (length - filledLength)
+    print("\r%s |%s| %s%% %s" % (prefix, bar, percent, suffix), end="\r")
     # Print New Line on Complete
     if iteration == total:
         print()
@@ -47,17 +49,20 @@ def read_rtstruct(structure):
     contours = []
     for i in range(len(structure.ROIContourSequence)):
         contour = {}
-        contour['color'] = structure.ROIContourSequence[i].ROIDisplayColor
-        contour['number'] = structure.ROIContourSequence[i].RefdROINumber
-        contour['name'] = structure.StructureSetROISequence[i].ROIName
-        assert contour['number'] == structure.StructureSetROISequence[i].ROINumber
-        contour['contours'] = [s.ContourData for s in structure.ROIContourSequence[i].ContourSequence]
+        contour["color"] = structure.ROIContourSequence[i].ROIDisplayColor
+        contour["number"] = structure.ROIContourSequence[i].RefdROINumber
+        contour["name"] = structure.StructureSetROISequence[i].ROIName
+        assert contour["number"] == structure.StructureSetROISequence[i].ROINumber
+        contour["contours"] = [
+            s.ContourData for s in structure.ROIContourSequence[i].ContourSequence
+        ]
         contours.append(contour)
     return contours
 
 
 def get_labelmap_from_rtstruct(contours, slices, image):
     from skimage.draw import polygon
+
     z = [s.ImagePositionPatient[2] for s in slices]
     pos_r = slices[0].ImagePositionPatient[1]
     o_r = int(slices[0].ImageOrientationPatient[4])
@@ -69,8 +74,8 @@ def get_labelmap_from_rtstruct(contours, slices, image):
     labelmap = np.zeros_like(image, dtype=np.uint8)
 
     for con in contours:
-        num = int(con['number'])
-        for i, c in enumerate(con['contours']):
+        num = int(con["number"])
+        for i, c in enumerate(con["contours"]):
 
             nodes = np.array(c).reshape((-1, 3))
             #             print(np.abs(np.diff(nodes[:, 2])))
@@ -86,7 +91,7 @@ def get_labelmap_from_rtstruct(contours, slices, image):
             rr, cc = polygon(r, c)
             labelmap[rr, cc, z_index] = num
 
-    colors = tuple(np.array([con['color'] for con in contours]) / 255.0)
+    colors = tuple(np.array([con["color"] for con in contours]) / 255.0)
     return labelmap, colors
 
 
@@ -114,34 +119,45 @@ def read_tag_file(filename, img_size=(512, 512)):
     v = np.fromfile(filename, dtype=np.uint8)
     imh = img_size[0]
     imw = img_size[1]
-    img = v[-imh * imw:].reshape(imh, imw)
+    img = v[-imh * imw :].reshape(imh, imw)
     return img
 
 
-def export_train_test_split(reader, out_dir='.', type='csv', ratio=0.66, seed=42, cv=False, n_splits=3):
+def export_train_test_split(
+    reader, out_dir=".", type="csv", ratio=0.66, seed=42, cv=False, n_splits=3
+):
     name = reader.name
 
-    if type == 'csv':
-        train_x, train_y, test_x, test_y, names_x, names_y = \
-            reader.get_train_test_split_labelled_images_list(ratio, is_paths=True, seed=seed)
+    if type == "csv":
+        (
+            train_x,
+            train_y,
+            test_x,
+            test_y,
+            names_x,
+            names_y,
+        ) = reader.get_train_test_split_labelled_images_list(
+            ratio, is_paths=True, seed=seed
+        )
 
         df = pd.DataFrame()
-        df['image'] = train_x
-        df['labelmap'] = train_y
-        df['name'] = names_x
-        df.set_index('name', inplace=True)
-        df.to_csv(os.path.join(out_dir, name + '_train_image_labelmap_list.csv'))
+        df["image"] = train_x
+        df["labelmap"] = train_y
+        df["name"] = names_x
+        df.set_index("name", inplace=True)
+        df.to_csv(os.path.join(out_dir, name + "_train_image_labelmap_list.csv"))
 
         df = pd.DataFrame()
-        df['image'] = test_x
-        df['labelmap'] = test_y
-        df['name'] = names_y
-        df.set_index('name', inplace=True)
-        df.to_csv(os.path.join(out_dir, name + '_test_image_labelmap_list.csv'))
+        df["image"] = test_x
+        df["labelmap"] = test_y
+        df["name"] = names_y
+        df.set_index("name", inplace=True)
+        df.to_csv(os.path.join(out_dir, name + "_test_image_labelmap_list.csv"))
 
-    elif type == 'txt':
+    elif type == "txt":
         if cv:
             from sklearn.model_selection import KFold
+
             kf = KFold(n_splits=n_splits)
             for i, (train_idx, test_idx) in enumerate(kf.split(reader.image_list)):
                 train_x = np.array(reader.image_list)[train_idx]
@@ -149,55 +165,107 @@ def export_train_test_split(reader, out_dir='.', type='csv', ratio=0.66, seed=42
                 test_x = np.array(reader.image_list)[test_idx]
                 test_y = np.array(reader.labelmap_list)[test_idx]
                 with open(
-                        os.path.join(out_dir, name + '_train_imagelist_f' + str(i + 1) + 'of' + str(n_splits) + '.txt'),
-                        'w+') as file:
+                    os.path.join(
+                        out_dir,
+                        name
+                        + "_train_imagelist_f"
+                        + str(i + 1)
+                        + "of"
+                        + str(n_splits)
+                        + ".txt",
+                    ),
+                    "w+",
+                ) as file:
                     for img_path in train_x:
-                        file.write(img_path + '\n')
+                        file.write(img_path + "\n")
 
                 with open(
-                        os.path.join(out_dir, name + '_train_labellist_f' + str(i + 1) + 'of' + str(n_splits) + '.txt'),
-                        'w+') as file:
+                    os.path.join(
+                        out_dir,
+                        name
+                        + "_train_labellist_f"
+                        + str(i + 1)
+                        + "of"
+                        + str(n_splits)
+                        + ".txt",
+                    ),
+                    "w+",
+                ) as file:
                     for img_path in train_y:
-                        file.write(img_path + '\n')
+                        file.write(img_path + "\n")
 
                 with open(
-                        os.path.join(out_dir, name + '_test_imagelist_f' + str(i + 1) + 'of' + str(n_splits) + '.txt'),
-                        'w+') as file:
+                    os.path.join(
+                        out_dir,
+                        name
+                        + "_test_imagelist_f"
+                        + str(i + 1)
+                        + "of"
+                        + str(n_splits)
+                        + ".txt",
+                    ),
+                    "w+",
+                ) as file:
                     for img_path in test_x:
-                        file.write(img_path + '\n')
+                        file.write(img_path + "\n")
 
                 with open(
-                        os.path.join(out_dir, name + '_test_labellist_f' + str(i + 1) + 'of' + str(n_splits) + '.txt'),
-                        'w+') as file:
+                    os.path.join(
+                        out_dir,
+                        name
+                        + "_test_labellist_f"
+                        + str(i + 1)
+                        + "of"
+                        + str(n_splits)
+                        + ".txt",
+                    ),
+                    "w+",
+                ) as file:
                     for img_path in test_y:
-                        file.write(img_path + '\n')
+                        file.write(img_path + "\n")
 
         else:
-            train_x, train_y, test_x, test_y, names_x, names_y = \
-                reader.get_train_test_split_labelled_images_list(ratio, is_paths=True, seed=seed)
-            with open(os.path.join(out_dir, name + '_train_imagelist.txt'), 'w+') as file:
+            (
+                train_x,
+                train_y,
+                test_x,
+                test_y,
+                names_x,
+                names_y,
+            ) = reader.get_train_test_split_labelled_images_list(
+                ratio, is_paths=True, seed=seed
+            )
+            with open(
+                os.path.join(out_dir, name + "_train_imagelist.txt"), "w+"
+            ) as file:
                 for img_path in train_x:
-                    file.write(img_path + '\n')
+                    file.write(img_path + "\n")
 
-            with open(os.path.join(out_dir, name + '_train_labellist.txt'), 'w+') as file:
+            with open(
+                os.path.join(out_dir, name + "_train_labellist.txt"), "w+"
+            ) as file:
                 for img_path in train_y:
-                    file.write(img_path + '\n')
+                    file.write(img_path + "\n")
 
-            with open(os.path.join(out_dir, name + '_test_imagelist.txt'), 'w+') as file:
+            with open(
+                os.path.join(out_dir, name + "_test_imagelist.txt"), "w+"
+            ) as file:
                 for img_path in test_x:
-                    file.write(img_path + '\n')
+                    file.write(img_path + "\n")
 
-            with open(os.path.join(out_dir, name + '_test_labellist.txt'), 'w+') as file:
+            with open(
+                os.path.join(out_dir, name + "_test_labellist.txt"), "w+"
+            ) as file:
                 for img_path in test_y:
-                    file.write(img_path + '\n')
+                    file.write(img_path + "\n")
 
-    elif type == 'csv_all':
+    elif type == "csv_all":
         df = pd.DataFrame()
-        df['image'] = reader.image_list
-        df['labelmap'] = reader.labelmap_list
-        df['name'] = reader.get_image_names()
-        df.set_index('name', inplace=True)
-        df.to_csv(os.path.join(out_dir, name + '_image_labelmap_list.csv'))
+        df["image"] = reader.image_list
+        df["labelmap"] = reader.labelmap_list
+        df["name"] = reader.get_image_names()
+        df.set_index("name", inplace=True)
+        df.to_csv(os.path.join(out_dir, name + "_image_labelmap_list.csv"))
 
 
 def get_spacing_dirname(spacing):
@@ -211,13 +279,13 @@ def get_spacing_dirname(spacing):
     if sum(spacing) <= 0:
         spacing_dirname = configs.native_images_dir
     elif len(spacing) == 1:
-        spacing_dirname = configs.subsampled_dir_prefix + str(spacing[0]) + 'mm'
+        spacing_dirname = configs.subsampled_dir_prefix + str(spacing[0]) + "mm"
     else:
-        spacing_str = ''
+        spacing_str = ""
         for s in spacing:
-            spacing_str += str(s) + '-'
+            spacing_str += str(s) + "-"
         spacing_str = spacing_str[:-1]
-        spacing_dirname = configs.subsampled_dir_prefix + spacing_str + 'mm'
+        spacing_dirname = configs.subsampled_dir_prefix + spacing_str + "mm"
 
     return spacing_dirname
 
@@ -226,26 +294,26 @@ def strip_extension(path):
     path = Path(path)
     remove = []
     for e in path.suffixes:
-        if e in {'.jpg', '.jpeg', '.nii', '.gz', '.json', '.yaml'}:
+        if e in {".jpg", ".jpeg", ".nii", ".gz", ".json", ".yaml", ".csv", ".nrrd"}:
             remove.append(e)
 
-    return str(path).rstrip(''.join(path.suffixes))
+    return str(path).rstrip("".join(path.suffixes))
 
 
 def parse_filepaths(filepaths: List, root_prefix: str):
     # # find common suffix
     #
     if len(filepaths) > 1:
-        suffix = os.path.commonprefix([c['path'][::-1] for c in filepaths])[::-1]
-    dirname_to_datatype = {v['dirname']: v['name'] for v in configs.data_types}
+        suffix = os.path.commonprefix([c["path"][::-1] for c in filepaths])[::-1]
+    dirname_to_datatype = {v["dirname"]: v["name"] for v in configs.data_types}
 
     parsed_filepaths = []
     for file in filepaths:
-        prefix = str(Path(file['path']).relative_to(root_prefix))
+        prefix = str(Path(file["path"]).relative_to(root_prefix))
 
         try:
-            base, spacing, filename = prefix.rsplit('/', 2)
-            base = base.split('/', 1)
+            base, spacing, filename = prefix.rsplit("/", 2)
+            base = base.split("/", 1)
             if len(base) > 1:
                 data_type_dirname, label = base
             else:
@@ -255,30 +323,37 @@ def parse_filepaths(filepaths: List, root_prefix: str):
             continue
 
         if data_type_dirname not in dirname_to_datatype:
-            logger.error(f'Invalid data_type {data_type_dirname} from acceptable {dirname_to_datatype.keys()}')
+            logger.error(
+                f"Invalid data_type {data_type_dirname} from acceptable {dirname_to_datatype.keys()}"
+            )
             continue
         data_type = dirname_to_datatype[data_type_dirname]
 
         if len(filepaths) > 1:
-            filename = filename.replace(suffix, '')
+            filename = filename.replace(suffix, "")
         filename = strip_extension(filename)
 
-        image_key = f'{data_type}/{label}' if label else data_type
-        parsed_filepaths.append({'spacing': spacing,
-                                 'path': file['path'],
-                                 'filename': filename,
-                                 'key': image_key,
-                                 'prefix': prefix,
-                                 'last_modified': file.get('last_modified', None),
-                                 'data_type': data_type})
+        image_key = f"{data_type}/{label}" if label else data_type
+        parsed_filepaths.append(
+            {
+                "spacing": spacing,
+                "path": file["path"],
+                "filename": filename,
+                "key": image_key,
+                "prefix": prefix,
+                "last_modified": file.get("last_modified", None),
+                "data_type": data_type,
+            }
+        )
     return parsed_filepaths
 
 
 def find_longest_matching_name(name, filenames):
-    longest_name = ''
+    longest_name = ""
     for existing_name in filenames:
         if existing_name in name and len(existing_name) > len(
-                longest_name):  # check if subset of existing name
+            longest_name
+        ):  # check if subset of existing name
             longest_name = existing_name
     if len(longest_name) > 0:
         name = longest_name
@@ -299,15 +374,14 @@ def grouped_by_name(files_iter: Dict[str, List], root_prefix: str) -> Dict:
     for data_type, file_list in files_iter.items():
         file_list = parse_filepaths(file_list, root_prefix=root_prefix)
         for file in file_list:
-            spacing = file['spacing']
-            name = file['filename']
-            image_key = file['key']
+            spacing = file["spacing"]
+            name = file["filename"]
+            image_key = file["key"]
             if spacing not in files:
                 files[spacing] = defaultdict(dict)
 
             if data_type != configs.primary_type:
-                name = find_longest_matching_name(name,
-                                                  filenames=files[spacing].keys())
+                name = find_longest_matching_name(name, filenames=files[spacing].keys())
 
             files[spacing][name][image_key] = file
     return {k: dict(v) for k, v in files.items()}
@@ -318,16 +392,17 @@ def grouped_by_key(files_iter: Dict[str, List], root_prefix: str) -> Dict:
     for data_type, file_list in files_iter.items():
         file_list = parse_filepaths(file_list, root_prefix=root_prefix)
         for file in file_list:
-            image_key = file.pop('key')
-            files[image_key].append(
-                file)
+            image_key = file.pop("key")
+            files[image_key].append(file)
     return dict(files)
 
 
-def grouped_files(files_iter: Dict[str, List], root_prefix: str, by: str = 'name') -> Dict:
-    if by == 'name':
+def grouped_files(
+    files_iter: Dict[str, List], root_prefix: str, by: str = "name"
+) -> Dict:
+    if by == "name":
         return grouped_by_name(files_iter, root_prefix)
-    elif by == 'key':
+    elif by == "key":
         return grouped_by_key(files_iter, root_prefix)
     else:
         raise NotImplementedError

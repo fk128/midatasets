@@ -96,8 +96,9 @@ def test_s3_backend(tmpdir):
             key = f"datasets/{dataset_name}/previews/native/img_{i}.jpg"
             s3.put_object(Bucket="mybucket", Key=key, Body="")
 
-        backend = storage_backends.DatasetS3Backend(bucket="mybucket", prefix=f"datasets/{dataset_name}")
-
+        backend = storage_backends.DatasetS3Backend(
+            bucket="mybucket", prefix=f"datasets/{dataset_name}"
+        )
 
         dest_path = f"{tmpdir}/datasets/{dataset_name}"
         backend.download(dest_path=dest_path, ext=(".jpg", ".nii.gz"))
@@ -118,7 +119,9 @@ def test_s3_backend_invalid(tmpdir):
             key = f"datasets/{dataset_name}/invalid/native/img_{i}.nii.gz"
             s3.put_object(Bucket="mybucket", Key=key, Body="")
 
-        backend = storage_backends.DatasetS3Backend(bucket="mybucket", prefix=f"datasets/{dataset_name}")
+        backend = storage_backends.DatasetS3Backend(
+            bucket="mybucket", prefix=f"datasets/{dataset_name}"
+        )
         assert len(backend.list_files()) == 0
         dest_path = f"{tmpdir}/datasets/{dataset_name}"
         backend.download(dest_path=dest_path, ext=(".jpg", ".gz"))
@@ -142,8 +145,9 @@ def test_s3_backend_sublabel(tmpdir):
                 key = f"datasets/{dataset_name}/images/{spacing}/img_{i}.nii.gz"
                 s3.put_object(Bucket="mybucket", Key=key, Body="")
 
-
-        backend = storage_backends.DatasetS3Backend(bucket="mybucket", prefix=f"datasets/{dataset_name}")
+        backend = storage_backends.DatasetS3Backend(
+            bucket="mybucket", prefix=f"datasets/{dataset_name}"
+        )
         dest_path = f"{tmpdir}/datasets/{dataset_name}"
 
         for spacing in [0, 1]:

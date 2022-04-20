@@ -9,6 +9,7 @@ import yaml
 from loguru import logger
 
 from midatasets import get_configs
+from midatasets.s3 import check_exists_s3, upload_file
 from midatasets.storage_backends import (
     DatasetLocalBackend,
     DatasetS3Backend,
@@ -782,25 +783,73 @@ else:
 
 
 class MImage:
-    def __init__(self, name, bucket, prefix, local_dir: str = "/tmp"):
-        self.name = name
+    def __init__(
+        self,
+        bucket: str,
+        prefix: str,
+        key: str,
+        local_path: Optional[str] = None,
+        base_dir: str = "/tmp",
+    ):
         self.bucket = bucket
         self.prefix = prefix
-        self.local_dir = local_dir
+        self.base_dir = base_dir
+        self._local_path = local_path
+        self.key = key
+        self.name = self._get_name()
+        self.validate()
+
+    def validate(self):
+        if self.key_dir not in self.prefix:
+            raise KeyError(f"`{self.key_dir}` not part of `{self.prefix}`")
+
+    @property
+    def key_dir(self):
+        parts = self.key.split("/")
+        if not parts[0].endswith("s"):
+            parts[0] = parts[0] + "s"
+        return "/".join(parts)
+
+    @classmethod
+    def from_s3_path(cls, s3_path: str, key: str, base_dir: str = "/tmp"):
+        path_parts = s3_path.replace("s3://", "").split("/")
+        bucket = path_parts.pop(0)
+
+        prefix = "/".join(path_parts)
+        return cls(bucket=bucket, prefix=prefix, base_dir=base_dir, key=key)
+
+    def _get_name(self):
+        path = Path(self.prefix)
+        while path.suffix in {".nii", ".gz", ".jpg", ".png"}:
+            path = path.with_suffix("")
+        return path.stem
 
     @property
     def local_path(self):
-        return str(Path(f"{self.local_dir}/{self.prefix}"))
+        """
+        use provided local path; otherwise, use from prefix
+        """
+        return self._local_path or str(Path(f"{self.base_dir}/{self.prefix}"))
 
     @property
     def s3_path(self):
         return f"s3://{self.bucket}/{self.prefix}"
 
-    def download(self, overwrite: bool = False):
+    @property
+    def resolution_dir(self):
+        return Path(self.prefix).parent.name
 
+    @property
+    def base_prefix(self):
+        return self.prefix.split(f"/{self.key_dir}")[0]
+
+    @property
+    def subprefix(self):
+        return str(Path(self.prefix).relative_to(self.base_prefix))
+
+    def download(self, overwrite: bool = False):
         s3 = boto3.resource("s3")
         bucket = s3.Bucket(self.bucket)
-
         target = Path(self.local_path)
         if target.exists() and not overwrite:
             logger.info(f"[already exists] {target}, skipping download.")
@@ -810,6 +859,18 @@ class MImage:
 
         logger.info(f"[Downloading] {self.s3_path} -> {target}")
         bucket.download_file(self.prefix, str(target))
+
+    def upload(self, overwrite: bool = False):
+        if not overwrite and check_exists_s3(self.bucket, self.prefix):
+            logger.info(f"[Upload] {self.s3_path} exists -- skipping")
+        upload_file(self.local_path, bucket=self.bucket, prefix=self.prefix)
+        logger.info(f"[Uploaded] {self.s3_path}")
+
+    def exists_local(self):
+        return os.path.exists(self.local_path)
+
+    def exists_remote(self):
+        return check_exists_s3(self.bucket, self.prefix)
 
     def delete(self):
         try:
@@ -827,17 +888,16 @@ class MImageIterator:
         self.data = next(
             iter(self.dataset.list_files(remote=remote, grouped=True).values())
         )
-        self.data = { name: value for name, value in self.data.items() if key in value}
+        self.data = {name: value for name, value in self.data.items() if key in value}
         self.names = list(self.data.keys())
-       
 
     def __getitem__(self, index) -> MImage:
         name = self.names[index]
         return MImage(
-            name=name,
             prefix=f'{self.dataset.remote_prefix}/{self.data[name][self.key]["prefix"]}',
             bucket=self.dataset.remote_bucket,
-            local_dir=self.dataset.dir_path.replace(self.dataset.remote_prefix, ""),
+            key=self.key,
+            base_dir=self.dataset.dir_path.replace(self.dataset.remote_prefix, ""),
         )
 
     def __len__(self):
