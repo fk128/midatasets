@@ -8,7 +8,7 @@ import pandas as pd
 import yaml
 from loguru import logger
 
-from midatasets import get_configs
+from midatasets import configs
 from midatasets.s3 import check_exists_s3, upload_file
 from midatasets.storage_backends import (
     DatasetLocalBackend,
@@ -99,7 +99,7 @@ class MIReaderBase:
             # in case local subdir is different from remote prefix
             if self.remote_prefix:
                 self.remote_dataset_name = self.remote_prefix.replace(
-                    get_configs().root_s3_prefix, ""
+                    configs.root_s3_prefix, ""
                 ).replace("/", "")
             else:
                 self.remote_dataset_name = self.name
@@ -175,7 +175,7 @@ class MIReaderBase:
         return self._valid_keys
 
     def get_root_path(self):
-        return get_configs().root_path
+        return configs.root_path
 
     def load_metadata_from_file(self, filename: str = "dataset.yaml"):
         metadata_path = Path(self.dir_path) / filename
@@ -217,7 +217,7 @@ class MIReaderBase:
 
     def upload(self, path: str, key: str):
         subprefix: Optional[str] = None
-        for d in get_configs().data_types:
+        for d in configs.data_types:
             if key.startswith(d["name"]):
                 subprefix = d["dirname"]
                 if "/" in key:
@@ -272,6 +272,7 @@ class MIReaderBase:
             ext=self.ext,
             grouped=True,
         )
+        print(self.dir_path, self.local_backend.root_path, self.spacing)
 
         if not files:
             raise FileNotFoundError
@@ -383,7 +384,7 @@ class MIReaderBase:
         return f"{self.labelmap_key}" in self.dataframe.columns
 
     def is_valid_data_type(self, key: str):
-        get_configs().data_types
+        configs.data_types
 
 
 class MIReaderExtended(MIReaderBase):
@@ -620,6 +621,7 @@ class MIReaderExtended(MIReaderBase):
         data = {}
         for name, images in files.items():
             if not names or name in names:
+
                 data[name] = {k: v["path"] for k, v in images.items()}
 
         def resample(paths, src_spacing, target_spacing, logger):
@@ -631,7 +633,7 @@ class MIReaderExtended(MIReaderBase):
                         continue
                     if not isinstance(path, str) or not path.endswith(".nii.gz"):
                         continue
-
+                    print("here2")
                     output_path = path.replace(
                         get_spacing_dirname(src_spacing),
                         ("8bit" if cast8bit else "")
@@ -694,9 +696,9 @@ class MIReaderExtended(MIReaderBase):
 
         name = self.get_image_name(i)
         logger.info(name)
-        output_image, image_name_suffix = get_output(get_configs().images_crop_prefix)
+        output_image, image_name_suffix = get_output(configs.images_crop_prefix)
         output_labelmap, labelmap_name_suffix = get_output(
-            get_configs().labelmaps_crop_prefix
+            configs.labelmaps_crop_prefix
         )
 
         lmap = self.load_labelmap(i)
@@ -752,7 +754,7 @@ class MIReaderExtended(MIReaderBase):
 
     def load_image_crop(self, img_idx, vol_size=(64, 64, 64), label=1):
         name = self.get_image_name(img_idx)
-        name_suffix = get_configs().images_crop_prefix + str(vol_size[0])
+        name_suffix = configs.images_crop_prefix + str(vol_size[0])
         output = self.get_imagetype_path(name_suffix)
         path = os.path.join(
             output, name + "_" + str(label) + "_" + name_suffix + ".nii.gz"
@@ -761,7 +763,7 @@ class MIReaderExtended(MIReaderBase):
 
     def load_labelmap_crop(self, img_idx, vol_size=(64, 64, 64), label=1):
         name = self.get_image_name(img_idx)
-        name_suffix = get_configs().labelmaps_crop_prefix + str(vol_size[0])
+        name_suffix = configs.labelmaps_crop_prefix + str(vol_size[0])
         output = self.get_imagetype_path(name_suffix)
         path = os.path.join(
             output, name + "_" + str(label) + "_" + name_suffix + ".nii.gz"
