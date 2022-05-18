@@ -7,7 +7,7 @@ import boto3
 import pandas as pd
 import yaml
 from loguru import logger
-
+import nibabel as nib
 from midatasets import configs
 from midatasets.s3 import check_exists_s3, upload_file
 from midatasets.storage_backends import (
@@ -34,23 +34,23 @@ except ImportError as e:
 
 class MIReaderBase:
     def __init__(
-        self,
-        spacing,
-        name: str = "reader",
-        is_cropped: bool = False,
-        crop_size: int = 64,
-        dir_path: Optional[str] = None,
-        ext: str = (".nii.gz",),
-        label: Optional[str] = None,
-        images_only: bool = False,
-        label_mappings: Optional[Dict[str, Dict]] = None,
-        remote_bucket: Optional[str] = None,
-        remote_profile: Optional[str] = None,
-        remote_prefix: Optional[str] = None,
-        remote_backend: Optional[Union[Callable, str]] = DatasetS3Backend,
-        fail_on_error: bool = False,
-        dropna: bool = True,
-        **kwargs,
+            self,
+            spacing,
+            name: str = "reader",
+            is_cropped: bool = False,
+            crop_size: int = 64,
+            dir_path: Optional[str] = None,
+            ext: str = (".nii.gz",),
+            label: Optional[str] = None,
+            images_only: bool = False,
+            label_mappings: Optional[Dict[str, Dict]] = None,
+            remote_bucket: Optional[str] = None,
+            remote_profile: Optional[str] = None,
+            remote_prefix: Optional[str] = None,
+            remote_backend: Optional[Union[Callable, str]] = DatasetS3Backend,
+            fail_on_error: bool = False,
+            dropna: bool = True,
+            **kwargs,
     ):
 
         self.label_mappings = label_mappings or {}
@@ -186,11 +186,11 @@ class MIReaderBase:
         return None
 
     def list_files(
-        self,
-        remote: bool = False,
-        grouped: bool = True,
-        spacing: Optional[float] = None,
-        data_types: Optional[List[str]] = None,
+            self,
+            remote: bool = False,
+            grouped: bool = True,
+            spacing: Optional[float] = None,
+            data_types: Optional[List[str]] = None,
     ):
         """
         list files locally or remotely
@@ -235,12 +235,12 @@ class MIReaderBase:
         return list(data["native"].keys())
 
     def download(
-        self,
-        max_images: Optional[int] = None,
-        dryrun: bool = False,
-        include: Optional[List[str]] = None,
-        spacing: Optional[float] = None,
-        **kwargs,
+            self,
+            max_images: Optional[int] = None,
+            dryrun: bool = False,
+            include: Optional[List[str]] = None,
+            spacing: Optional[float] = None,
+            **kwargs,
     ):
         """
         download images using remote backend
@@ -272,7 +272,6 @@ class MIReaderBase:
             ext=self.ext,
             grouped=True,
         )
-        print(self.dir_path, self.local_backend.root_path, self.spacing)
 
         if not files:
             raise FileNotFoundError
@@ -354,7 +353,7 @@ class MIReaderBase:
         return get_spacing_dirname(spacing)
 
     def get_imagetype_path(
-        self, images_type: str, crop_suffix: str = "_crop", split=False
+            self, images_type: str, crop_suffix: str = "_crop", split=False
     ):
 
         suffix = ""
@@ -419,11 +418,11 @@ class MIReaderExtended(MIReaderBase):
             return self._load_image_by_name(img_idx)
 
     def load_image_and_resample(
-        self,
-        img_idx: int,
-        new_spacing: Union[int, float],
-        key: Optional[str] = None,
-        nearest: bool = False,
+            self,
+            img_idx: int,
+            new_spacing: Union[int, float],
+            key: Optional[str] = None,
+            nearest: bool = False,
     ):
         key = key or self.image_key
         image_path = self.dataframe.iloc[img_idx][f"{key}_path"]
@@ -508,12 +507,12 @@ class MIReaderExtended(MIReaderBase):
         )
 
     def extract_random_class_balanced_subvolume(
-        self,
-        img_idx,
-        subvol_size=(64, 64, 64),
-        num=2,
-        class_weights=(1, 1),
-        num_labels=2,
+            self,
+            img_idx,
+            subvol_size=(64, 64, 64),
+            num=2,
+            class_weights=(1, 1),
+            num_labels=2,
     ):
 
         return midatasets.preprocessing.extract_class_balanced_example_array(
@@ -599,15 +598,15 @@ class MIReaderExtended(MIReaderBase):
         return slices
 
     def generate_resampled(
-        self,
-        spacing: float,
-        parallel: bool = True,
-        num_workers: int = -1,
-        from_spacing: Optional[float] = None,
-        image_types: List[str] = None,
-        overwrite: bool = False,
-        cast8bit: bool = False,
-        names: Optional[List[str]] = None,
+            self,
+            spacing: float,
+            parallel: bool = True,
+            num_workers: int = -1,
+            from_spacing: Optional[float] = None,
+            image_types: List[str] = None,
+            overwrite: bool = False,
+            cast8bit: bool = False,
+            names: Optional[List[str]] = None,
     ):
         if names:
             names = set(names)
@@ -621,7 +620,6 @@ class MIReaderExtended(MIReaderBase):
         data = {}
         for name, images in files.items():
             if not names or name in names:
-
                 data[name] = {k: v["path"] for k, v in images.items()}
 
         def resample(paths, src_spacing, target_spacing, logger):
@@ -633,7 +631,6 @@ class MIReaderExtended(MIReaderBase):
                         continue
                     if not isinstance(path, str) or not path.endswith(".nii.gz"):
                         continue
-                    print("here2")
                     output_path = path.replace(
                         get_spacing_dirname(src_spacing),
                         ("8bit" if cast8bit else "")
@@ -786,12 +783,12 @@ else:
 
 class MImage:
     def __init__(
-        self,
-        bucket: str,
-        prefix: str,
-        key: str,
-        local_path: Optional[str] = None,
-        base_dir: str = "/tmp",
+            self,
+            bucket: str,
+            prefix: str,
+            key: str,
+            local_path: Optional[str] = None,
+            base_dir: str = "/tmp",
     ):
         self.bucket = bucket
         self.prefix = prefix
@@ -800,6 +797,8 @@ class MImage:
         self.key = key
         self.name = self._get_name()
         self.validate()
+        self._shape = None
+        self._affine = None
 
     def validate(self):
         if self.key_dir not in self.prefix:
@@ -881,10 +880,27 @@ class MImage:
         except Exception as e:
             logger.warning(e)
 
+    def _load_metadata(self):
+        native_img = nib.load(self.local_path)
+        self._shape = native_img.shape
+        self._affine = native_img.affine
+        del native_img
+
+    @property
+    def shape(self):
+        if self._shape is None:
+            self._load_metadata()
+        return self._shape
+
+    @property
+    def affine(self):
+        if self._affine is None:
+            self._load_metadata()
+        return self._affine
+
 
 class MImageIterator:
     def __init__(self, dataset: MIReader, key: str, remote: bool = True):
-
         self.dataset = dataset
         self.key = key
         self.data = next(
@@ -906,4 +922,36 @@ class MImageIterator:
         return len(self.data)
 
 
-__all__ = [MIReader, MImage, MImageIterator]
+class MImageMultiIterator:
+    def __init__(self, dataset: MIReader, keys: List[str], remote: bool = True):
+
+        self.dataset = dataset
+        self.keys = keys
+        self.data = next(
+            iter(self.dataset.list_files(remote=remote, grouped=True).values())
+        )
+        self.data = {name: value for name, value in self.data.items() if self._issubset(keys, value)}
+        self.names = list(self.data.keys())
+
+    def _issubset(self, keys: List[str], values: Dict):
+        for key in keys:
+            if key not in values:
+                return False
+        return True
+
+    def __getitem__(self, index) -> Dict[str, MImage]:
+        name = self.names[index]
+        return {key: MImage(
+            prefix=f'{self.dataset.remote_prefix}/{self.data[name][key]["prefix"]}',
+            bucket=self.dataset.remote_bucket,
+            key=key,
+            base_dir=self.dataset.dir_path.replace(self.dataset.remote_prefix, ""),
+        ) for key in self.keys}
+
+    def __len__(self):
+        return len(self.data)
+
+
+MIDataset = MIReader
+
+__all__ = [MIReader, MIDataset, MImage, MImageIterator, MImageMultiIterator]
