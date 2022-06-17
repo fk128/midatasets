@@ -789,6 +789,7 @@ class MImage:
             key: str,
             local_path: Optional[str] = None,
             base_dir: str = "/tmp",
+            validate_key: bool = True
     ):
         self.bucket = bucket
         self.prefix = prefix
@@ -796,7 +797,8 @@ class MImage:
         self._local_path = local_path
         self.key = key
         self.name = self._get_name()
-        self.validate()
+        if validate_key:
+            self.validate()
         self._shape = None
         self._affine = None
 
