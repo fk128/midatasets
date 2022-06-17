@@ -814,12 +814,12 @@ class MImage:
         return "/".join(parts)
 
     @classmethod
-    def from_s3_path(cls, s3_path: str, key: str, base_dir: str = "/tmp"):
+    def from_s3_path(cls, s3_path: str, key: str, base_dir: str = "/tmp", **kwargs):
         path_parts = s3_path.replace("s3://", "").split("/")
         bucket = path_parts.pop(0)
 
         prefix = "/".join(path_parts)
-        return cls(bucket=bucket, prefix=prefix, base_dir=base_dir, key=key)
+        return cls(bucket=bucket, prefix=prefix, base_dir=base_dir, key=key, **kwargs)
 
     def _get_name(self):
         path = Path(self.prefix)
