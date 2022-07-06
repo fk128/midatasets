@@ -817,7 +817,6 @@ class MImage:
     def from_s3_path(cls, s3_path: str, key: str, base_dir: str = "/tmp", **kwargs):
         path_parts = s3_path.replace("s3://", "").split("/")
         bucket = path_parts.pop(0)
-
         prefix = "/".join(path_parts)
         return cls(bucket=bucket, prefix=prefix, base_dir=base_dir, key=key, **kwargs)
 
@@ -866,6 +865,7 @@ class MImage:
     def upload(self, overwrite: bool = False):
         if not overwrite and check_exists_s3(self.bucket, self.prefix):
             logger.info(f"[Upload] {self.s3_path} exists -- skipping")
+            return
         upload_file(self.local_path, bucket=self.bucket, prefix=self.prefix)
         logger.info(f"[Uploaded] {self.s3_path}")
 
