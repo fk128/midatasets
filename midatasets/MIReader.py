@@ -34,23 +34,23 @@ except ImportError as e:
 
 class MIReaderBase:
     def __init__(
-            self,
-            spacing,
-            name: str = "reader",
-            is_cropped: bool = False,
-            crop_size: int = 64,
-            dir_path: Optional[str] = None,
-            ext: str = (".nii.gz",),
-            label: Optional[str] = None,
-            images_only: bool = False,
-            label_mappings: Optional[Dict[str, Dict]] = None,
-            remote_bucket: Optional[str] = None,
-            remote_profile: Optional[str] = None,
-            remote_prefix: Optional[str] = None,
-            remote_backend: Optional[Union[Callable, str]] = DatasetS3Backend,
-            fail_on_error: bool = False,
-            dropna: bool = True,
-            **kwargs,
+        self,
+        spacing,
+        name: str = "reader",
+        is_cropped: bool = False,
+        crop_size: int = 64,
+        dir_path: Optional[str] = None,
+        ext: str = (".nii.gz",),
+        label: Optional[str] = None,
+        images_only: bool = False,
+        label_mappings: Optional[Dict[str, Dict]] = None,
+        remote_bucket: Optional[str] = None,
+        remote_profile: Optional[str] = None,
+        remote_prefix: Optional[str] = None,
+        remote_backend: Optional[Union[Callable, str]] = DatasetS3Backend,
+        fail_on_error: bool = False,
+        dropna: bool = True,
+        **kwargs,
     ):
 
         self.label_mappings = label_mappings or {}
@@ -186,11 +186,11 @@ class MIReaderBase:
         return None
 
     def list_files(
-            self,
-            remote: bool = False,
-            grouped: bool = True,
-            spacing: Optional[float] = None,
-            data_types: Optional[List[str]] = None,
+        self,
+        remote: bool = False,
+        grouped: bool = True,
+        spacing: Optional[float] = None,
+        data_types: Optional[List[str]] = None,
     ):
         """
         list files locally or remotely
@@ -235,12 +235,12 @@ class MIReaderBase:
         return list(data["native"].keys())
 
     def download(
-            self,
-            max_images: Optional[int] = None,
-            dryrun: bool = False,
-            include: Optional[List[str]] = None,
-            spacing: Optional[float] = None,
-            **kwargs,
+        self,
+        max_images: Optional[int] = None,
+        dryrun: bool = False,
+        include: Optional[List[str]] = None,
+        spacing: Optional[float] = None,
+        **kwargs,
     ):
         """
         download images using remote backend
@@ -353,7 +353,7 @@ class MIReaderBase:
         return get_spacing_dirname(spacing)
 
     def get_imagetype_path(
-            self, images_type: str, crop_suffix: str = "_crop", split=False
+        self, images_type: str, crop_suffix: str = "_crop", split=False
     ):
 
         suffix = ""
@@ -418,11 +418,11 @@ class MIReaderExtended(MIReaderBase):
             return self._load_image_by_name(img_idx)
 
     def load_image_and_resample(
-            self,
-            img_idx: int,
-            new_spacing: Union[int, float],
-            key: Optional[str] = None,
-            nearest: bool = False,
+        self,
+        img_idx: int,
+        new_spacing: Union[int, float],
+        key: Optional[str] = None,
+        nearest: bool = False,
     ):
         key = key or self.image_key
         image_path = self.dataframe.iloc[img_idx][f"{key}_path"]
@@ -507,12 +507,12 @@ class MIReaderExtended(MIReaderBase):
         )
 
     def extract_random_class_balanced_subvolume(
-            self,
-            img_idx,
-            subvol_size=(64, 64, 64),
-            num=2,
-            class_weights=(1, 1),
-            num_labels=2,
+        self,
+        img_idx,
+        subvol_size=(64, 64, 64),
+        num=2,
+        class_weights=(1, 1),
+        num_labels=2,
     ):
 
         return midatasets.preprocessing.extract_class_balanced_example_array(
@@ -598,15 +598,15 @@ class MIReaderExtended(MIReaderBase):
         return slices
 
     def generate_resampled(
-            self,
-            spacing: float,
-            parallel: bool = True,
-            num_workers: int = -1,
-            from_spacing: Optional[float] = None,
-            image_types: List[str] = None,
-            overwrite: bool = False,
-            cast8bit: bool = False,
-            names: Optional[List[str]] = None,
+        self,
+        spacing: float,
+        parallel: bool = True,
+        num_workers: int = -1,
+        from_spacing: Optional[float] = None,
+        image_types: List[str] = None,
+        overwrite: bool = False,
+        cast8bit: bool = False,
+        names: Optional[List[str]] = None,
     ):
         if names:
             names = set(names)
@@ -781,50 +781,47 @@ else:
     MIReader = MIReaderBase
 
 
-class MImage:
+class S3Object:
     def __init__(
-            self,
-            bucket: str,
-            prefix: str,
-            key: str,
-            local_path: Optional[str] = None,
-            base_dir: str = "/tmp",
-            validate_key: bool = True
+        self,
+        bucket: str,
+        prefix: str,
+        key: Optional[str] = None,
+        local_path: Optional[str] = None,
+        base_dir: str = "/tmp",
+        **kwargs,
     ):
         self.bucket = bucket
         self.prefix = prefix
         self.base_dir = base_dir
-        self._local_path = local_path
         self.key = key
-        self.name = self._get_name()
-        if validate_key:
-            self.validate()
-        self._shape = None
-        self._affine = None
+        self._name = None
+        self._ext = None
+        self._local_path = local_path
 
-    def validate(self):
-        if self.key_dir not in self.prefix:
-            raise KeyError(f"`{self.key_dir}` not part of `{self.prefix}`")
-
-    @property
-    def key_dir(self):
-        parts = self.key.split("/")
-        if not parts[0].endswith("s"):
-            parts[0] = parts[0] + "s"
-        return "/".join(parts)
+    def __repr__(self):
+        return f"{self.__class__.__name__}(name={self.name}, s3_path={self.s3_path})"
 
     @classmethod
-    def from_s3_path(cls, s3_path: str, key: str, base_dir: str = "/tmp", **kwargs):
+    def from_s3_path(
+        cls,
+        s3_path: str,
+        base_dir: str = "/tmp",
+        key: Optional[str] = None,
+        local_path: Optional[str] = None,
+        **kwargs,
+    ):
         path_parts = s3_path.replace("s3://", "").split("/")
         bucket = path_parts.pop(0)
         prefix = "/".join(path_parts)
-        return cls(bucket=bucket, prefix=prefix, base_dir=base_dir, key=key, **kwargs)
-
-    def _get_name(self):
-        path = Path(self.prefix)
-        while path.suffix in {".nii", ".gz", ".jpg", ".png"}:
-            path = path.with_suffix("")
-        return path.stem
+        return cls(
+            bucket=bucket,
+            prefix=prefix,
+            base_dir=base_dir,
+            key=key,
+            local_path=local_path,
+            **kwargs,
+        )
 
     @property
     def local_path(self):
@@ -838,16 +835,39 @@ class MImage:
         return f"s3://{self.bucket}/{self.prefix}"
 
     @property
-    def resolution_dir(self):
-        return Path(self.prefix).parent.name
+    def extension(self):
+        if self._ext is None:
+            self._ext = "".join(
+                [
+                    s
+                    for s in Path(self.prefix).suffixes
+                    if s
+                    in {
+                        ".jpg",
+                        ".jpeg",
+                        ".nii",
+                        ".gz",
+                        ".json",
+                        ".yaml",
+                        ".yml",
+                        ".csv",
+                        ".nrrd",
+                    }
+                ]
+            )
+
+        return self._ext
 
     @property
-    def base_prefix(self):
-        return self.prefix.split(f"/{self.key_dir}")[0]
+    def name(self):
+        if self._name is None:
+            path = Path(self.prefix)
+            self._name = path.name.replace(self.extension, "")
+        return self._name
 
     @property
-    def subprefix(self):
-        return str(Path(self.prefix).relative_to(self.base_prefix))
+    def basename(self):
+        return Path(self.prefix).name
 
     def download(self, overwrite: bool = False):
         s3 = boto3.resource("s3")
@@ -882,6 +902,69 @@ class MImage:
         except Exception as e:
             logger.warning(e)
 
+
+class MObject(S3Object):
+    def __init__(
+        self,
+        bucket: str,
+        prefix: str,
+        key: str,
+        local_path: Optional[str] = None,
+        base_dir: str = "/tmp",
+        validate_key: bool = True,
+    ):
+        super().__init__(
+            bucket=bucket,
+            prefix=prefix,
+            local_path=local_path,
+            base_dir=base_dir,
+            key=key,
+        )
+
+        if validate_key:
+            self.validate()
+
+    def validate(self):
+        if self.key_dir not in self.prefix:
+            raise KeyError(f"`{self.key_dir}` not part of `{self.prefix}`")
+
+    @property
+    def key_dir(self):
+        parts = self.key.split("/")
+        if not parts[0].endswith("s"):
+            parts[0] = parts[0] + "s"
+        return "/".join(parts)
+
+    @property
+    def base_prefix(self):
+        return self.prefix.split(f"/{self.key_dir}")[0]
+
+    @property
+    def subprefix(self):
+        return str(Path(self.prefix).relative_to(self.base_prefix))
+
+
+class MImage(MObject):
+    def __init__(
+        self,
+        bucket: str,
+        prefix: str,
+        key: str,
+        local_path: Optional[str] = None,
+        base_dir: str = "/tmp",
+        validate_key: bool = True,
+    ):
+        super().__init__(
+            bucket=bucket,
+            prefix=prefix,
+            key=key,
+            local_path=local_path,
+            base_dir=base_dir,
+            validate_key=validate_key,
+        )
+        self._shape = None
+        self._affine = None
+
     def _load_metadata(self):
         native_img = nib.load(self.local_path)
         self._shape = native_img.shape
@@ -899,6 +982,10 @@ class MImage:
         if self._affine is None:
             self._load_metadata()
         return self._affine
+
+    @property
+    def resolution_dir(self):
+        return Path(self.prefix).parent.name
 
 
 class MImageIterator:
@@ -932,7 +1019,11 @@ class MImageMultiIterator:
         self.data = next(
             iter(self.dataset.list_files(remote=remote, grouped=True).values())
         )
-        self.data = {name: value for name, value in self.data.items() if self._issubset(keys, value)}
+        self.data = {
+            name: value
+            for name, value in self.data.items()
+            if self._issubset(keys, value)
+        }
         self.names = list(self.data.keys())
 
     def _issubset(self, keys: List[str], values: Dict):
@@ -943,12 +1034,15 @@ class MImageMultiIterator:
 
     def __getitem__(self, index) -> Dict[str, MImage]:
         name = self.names[index]
-        return {key: MImage(
-            prefix=f'{self.dataset.remote_prefix}/{self.data[name][key]["prefix"]}',
-            bucket=self.dataset.remote_bucket,
-            key=key,
-            base_dir=self.dataset.dir_path.replace(self.dataset.remote_prefix, ""),
-        ) for key in self.keys}
+        return {
+            key: MImage(
+                prefix=f'{self.dataset.remote_prefix}/{self.data[name][key]["prefix"]}',
+                bucket=self.dataset.remote_bucket,
+                key=key,
+                base_dir=self.dataset.dir_path.replace(self.dataset.remote_prefix, ""),
+            )
+            for key in self.keys
+        }
 
     def __len__(self):
         return len(self.data)
