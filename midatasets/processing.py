@@ -32,4 +32,4 @@ def resample_mimage(image: MImage, target_spacing: Union[float, int]):
     )
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     sitk.WriteImage(sitk_image, output_path)
-    return MImage(bucket=image.bucket, prefix=prefix, key=image.key, base_dir=image.base_dir)
+    return MImage(bucket=image.bucket, prefix=prefix, key=image.key, base_dir=image.base_dir, validate_key=False)
