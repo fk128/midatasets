@@ -3,4 +3,4 @@ loguru
 pydantic
 pyyaml
 smart_open
-pandas
+pandas==1.2.2
