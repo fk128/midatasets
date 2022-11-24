@@ -8,10 +8,12 @@ from midatasets.utils import get_spacing_dirname
 import SimpleITK as sitk
 
 
-def resample_mimage(image: MImage, target_spacing: Union[float, int]):
+def resample_mimage(image: MImage,
+                    target_spacing: Union[float, int], overwrite: bool = False):
     output_path = image.local_path.replace(image.resolution_dir, get_spacing_dirname(target_spacing))
     prefix = image.prefix.replace(image.resolution_dir, get_spacing_dirname(target_spacing))
-
+    if not overwrite and Path(output_path).exists():
+        return MImage(bucket=image.bucket, prefix=prefix, key=image.key, base_dir=image.base_dir, validate_key=False)
     sitk_image = sitk.ReadImage(image.local_path)
     interpolation = (
         sitk.sitkLinear
