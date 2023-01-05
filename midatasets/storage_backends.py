@@ -114,6 +114,7 @@ class DatasetS3Backend(DatasetStorageBackendBase):
         if self.__class__.client is None:
             self.__class__.client = boto3.session.Session().client(
                 "s3",
+                endpoint_url=configs.aws_endpoint_url,
                 config=botocore.config.Config(
                     retries={"max_attempts": 10, "mode": "standard"}
                 ),
@@ -219,7 +220,7 @@ class DatasetS3Backend(DatasetStorageBackendBase):
         if limit > -1:
             total = sum(
                 1
-                for _ in boto3.resource("s3")
+                for _ in boto3.resource("s3", endpoint_url=configs.aws_endpoint_url)
                 .Bucket(self.bucket)
                 .objects.filter(Prefix=f"{self.prefix}/{primary_key}")
             )
@@ -251,7 +252,7 @@ class DatasetS3Backend(DatasetStorageBackendBase):
         if src_prefix is None:
             src_prefix = str(Path(self.prefix)) + "/"
         dest_path = Path(dest_path)
-        s3 = boto3.resource("s3")
+        s3 = boto3.resource("s3", endpoint_url=configs.aws_endpoint_url)
         bucket = s3.Bucket(self.bucket)
         files = self.list_files(spacing=spacing, ext=ext, grouped=True)
         if not files:

@@ -800,7 +800,7 @@ class S3Object:
         self._local_path = local_path
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(name={self.name}, s3_path={self.s3_path})"
+        return f"{self.__class__.__name__}(name={self.name}, s3_path={self.s3_path}, local_path={self.local_path})"
 
     @classmethod
     def from_s3_path(
@@ -870,7 +870,7 @@ class S3Object:
         return Path(self.prefix).name
 
     def download(self, overwrite: bool = False):
-        s3 = boto3.resource("s3")
+        s3 = boto3.resource("s3", endpoint_url=configs.aws_endpoint_url)
         bucket = s3.Bucket(self.bucket)
         target = Path(self.local_path)
         if target.exists() and not overwrite:
