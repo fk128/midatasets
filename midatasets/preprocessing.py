@@ -133,7 +133,7 @@ def sitk_resample(sitk_image, min_spacing, interpolation=sitk.sitkLinear):
     resampleSliceFilter.SetOutputDirection(sitk_image.GetDirection())
     resampleSliceFilter.SetOutputOrigin(sitk_image.GetOrigin())
     resampleSliceFilter.SetTransform(sitk.Transform())
-    resampleSliceFilter.SetDefaultPixelValue(sitk_image.GetPixelIDValue())
+    resampleSliceFilter.SetDefaultPixelValue(0)
 
     return resampleSliceFilter.Execute(sitk_image)
 
