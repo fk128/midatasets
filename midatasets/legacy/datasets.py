@@ -6,7 +6,7 @@ from loguru import logger
 
 from midatasets import configs
 from midatasets.MIReader import MIReader
-from midatasets.databases import DBBase, MIDatasetDBTypes, MIDatasetModel
+from midatasets.legacy.databases import DBBase, MIDatasetDBTypes, MIDatasetModel
 from midatasets.storage_backends import DatasetS3Backend, DatasetLocalBackend
 
 _midataset_store = None

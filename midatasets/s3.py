@@ -4,11 +4,11 @@ from botocore.exceptions import ClientError
 import os
 from midatasets import configs
 
-s3_client = boto3.client("s3", endpoint_url=configs.aws_endpoint_url)
 
 def check_exists_s3(bucket: str, prefix: str):
 
     try:
+        s3_client = boto3.client("s3", endpoint_url=configs.aws_endpoint_url)
         s3_client.head_object(Bucket=bucket, Key=prefix)
         return True
     except ClientError:
@@ -31,6 +31,7 @@ def upload_file(file_name, bucket, prefix=None):
     # Upload the file
 
     try:
+        s3_client = boto3.client("s3", endpoint_url=configs.aws_endpoint_url)
         response = s3_client.upload_file(file_name, bucket, prefix)
     except ClientError as e:
         logging.error(e)

@@ -585,7 +585,7 @@ def extract_random_nibabel(images, sample_shape=(1, 64, 64), n_samples=1):
 
     rnd_loc = [np.random.randint(valid_loc_range[dim], size=n_samples)
                if valid_loc_range[dim] > 0 else np.zeros(n_samples, dtype=int) for dim in range(rank)]
-    print('here')
+
     examples = [[]] * len(images)
     for i in range(n_samples):
         slicer = [slice(rnd_loc[dim][i], rnd_loc[dim][i] + sample_shape[dim]) for dim in range(rank)]

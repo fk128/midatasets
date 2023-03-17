@@ -359,6 +359,7 @@ class DatasetLocalBackend(DatasetStorageBackendBase):
         spacing: Optional[Union[float, int]] = None,
         data_types: Optional[List[str]] = None,
         ext: Tuple[str] = (".nii.gz",),
+            path: Optional[str] = None,
         grouped=False,
         skip: int = 0,
         limit: int = -1,
@@ -366,14 +367,13 @@ class DatasetLocalBackend(DatasetStorageBackendBase):
     ):
         if not isinstance(ext, tuple):
             ext = (ext,)
-        dataset_path = Path(self.root_path)
+        dataset_path = Path(path) if path is not None else Path(self.root_path)
 
         data_types = self.get_data_types(data_types)
 
         files = {}
         pattern = f"*/{get_spacing_dirname(spacing)}/*" if spacing is not None else "*"
         for data_type in data_types:
-
             files_iter = [
                 str(f)
                 for e in ext

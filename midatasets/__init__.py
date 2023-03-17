@@ -3,9 +3,10 @@
 __version__ = "0.22.1"
 
 import os
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Set
 
 from pydantic import BaseSettings, validator
+from midatasets.schemas import BaseType
 
 
 class Configs(BaseSettings):
@@ -19,14 +20,31 @@ class Configs(BaseSettings):
     aws_s3_bucket: Optional[str] = None
     aws_s3_profile: Optional[str] = None
     aws_endpoint_url: Optional[str] = None
-    remap_dirs: Dict = {"images": "image", "labelmaps": "labelmap"}
     primary_type: str = "image"
+    extensions: Set[str] = {
+        ".jpg",
+        ".jpeg",
+        ".nii",
+        ".gz",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".csv",
+        ".nrrd",
+    }
     data_types: List[Dict] = [
         {"dirname": "images", "name": "image"},
         {"dirname": "labelmaps", "name": "labelmap"},
         {"dirname": "previews", "name": "preview"},
         {"dirname": "outputs", "name": "output"},
         {"dirname": "metadata", "name": "metadata"},
+    ]
+    base_types: List[BaseType] = [
+        BaseType(name="image", dirname="images"),
+        BaseType(name="labelmap", dirname="labelmaps"),
+        BaseType(name="preview", dirname="previews"),
+        BaseType(name="output", dirname="outputs"),
+        BaseType(name="metadata", dirname="metadata"),
     ]
     database: str = "yaml"
 
@@ -35,8 +53,11 @@ class Configs(BaseSettings):
         env_prefix = "midatasets_"
 
     @validator("root_path")
-    def name_must_contain_space(cls, v):
+    def expand_vars(cls, v):
         return os.path.expandvars(v)
 
 
 configs = Configs()
+
+from .midataset import MIDataset
+from .mimage import S3Object, MImage, MObject

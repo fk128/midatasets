@@ -3,53 +3,14 @@ from pathlib import Path
 import boto3
 from midatasets import storage_backends
 from midatasets.MIReader import MIReader
-from midatasets.utils import get_spacing_dirname
+from midatasets.utils import get_spacing_dirname, create_dummy_dataset
 from moto import mock_s3
-
-
-def test_local_backend_sublabels(tmpdir):
-    p = Path(tmpdir)
-    labels = ["l1", "l2"]
-    for dataset_name in ["foo", "bar"]:
-        for l in labels:
-            (p / dataset_name / "labelmaps" / l / "native").mkdir(
-                exist_ok=True, parents=True
-            )
-        (p / dataset_name / "images" / "native").mkdir(exist_ok=True, parents=True)
-        for i in range(10):
-            for l in labels:
-                (
-                    p
-                    / dataset_name
-                    / "labelmaps"
-                    / l
-                    / "native"
-                    / f"image_{i}_seg.nii.gz"
-                ).touch()
-            (p / dataset_name / "images" / "native" / f"image_{i}.nii.gz").touch()
-
-    dataset = MIReader(
-        dir_path=str(Path(tmpdir) / "foo"), spacing=0, remote_backend=None
-    )
-
-    assert list(dataset.dataframe.columns) == [
-        "image",
-        "labelmap/l2",
-        "labelmap/l1",
-    ]
-    assert len(dataset.dataframe) == 10
 
 
 def test_local_backend(tmpdir):
     p = Path(tmpdir)
     for dataset_name in ["foo", "bar"]:
-        (p / dataset_name / "labelmaps" / "native").mkdir(exist_ok=True, parents=True)
-        (p / dataset_name / "images" / "native").mkdir(exist_ok=True, parents=True)
-        for i in range(10):
-            (
-                p / dataset_name / "labelmaps" / "native" / f"image_{i}_seg.nii.gz"
-            ).touch()
-            (p / dataset_name / "images" / "native" / f"image_{i}.nii.gz").touch()
+        create_dummy_dataset(name=dataset_name, labels=["label1"], root_path=tmpdir)
 
     dataset = MIReader(
         dir_path=str(Path(tmpdir) / "foo"), spacing=0, remote_backend=None

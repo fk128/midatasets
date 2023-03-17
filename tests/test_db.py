@@ -1,14 +1,14 @@
 import os
 
 import pytest
-from midatasets.databases import (
+from midatasets.legacy.databases import (
     DBYaml,
     MIDatasetModel,
     DBComposite,
     DBMongodb,
     DBDynamodb,
 )
-from midatasets.datasets import MIDatasetStore
+from midatasets.legacy.datasets import MIDatasetStore
 from moto import mock_dynamodb2
 
 

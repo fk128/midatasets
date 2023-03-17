@@ -3,7 +3,7 @@ from typing import Union, List
 
 from joblib import Parallel, delayed
 from loguru import logger
-from midatasets.MIReader import MImage
+from midatasets.mimage import MImage
 from midatasets.preprocessing import sitk_resample
 from midatasets.utils import get_spacing_dirname
 import SimpleITK as sitk
