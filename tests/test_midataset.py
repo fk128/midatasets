@@ -8,8 +8,8 @@ from midatasets.utils import create_dummy_dataset, create_dummy_s3_dataset
 def test_with_local_client(tmpdir):
     name = "test"
     create_dummy_dataset(name=name, labels=["l1"], root_path=tmpdir)
-    client = LocalClient(root_dir=tmpdir)
-    dataset = MIDataset(dataset_id=name, client=client, base_dir=tmpdir)
+    client = LocalClient(root_dir=str(tmpdir))
+    dataset = MIDataset(dataset_id=name, client=client, base_dir=str(tmpdir))
     for a in dataset.iterate_keys(keys=["image", "labelmap/l1"], spacing=0):
         assert len(a) == 2
 
