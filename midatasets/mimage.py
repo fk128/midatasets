@@ -8,7 +8,7 @@ from loguru import logger
 
 from midatasets import configs
 from midatasets.s3 import check_exists_s3, upload_file
-from midatasets.utils import get_key_dirname
+from midatasets.utils import get_key_dirname, get_extension
 
 
 class S3Object:
@@ -65,7 +65,7 @@ class S3Object:
             raise Exception(f"base_dir {base_dir} not part of {local_path}")
         return cls(
             bucket=kwargs.pop("bucket") if "bucket" in kwargs else "local",
-            prefix=str(Path(local_path).relative_to(base_dir)),
+            prefix=kwargs.pop("prefix") if "prefix" in kwargs else str(Path(local_path).relative_to(base_dir)),
             base_dir=base_dir,
             key=key,
             local_path=local_path,
@@ -86,9 +86,7 @@ class S3Object:
     @property
     def extension(self):
         if self._ext is None:
-            self._ext = "".join(
-                [s for s in Path(self.prefix).suffixes if s in configs.extensions]
-            )
+            self._ext = get_extension(self.prefix)
 
         return self._ext
 
@@ -168,20 +166,29 @@ class MObject(S3Object):
 
     @property
     def base_prefix(self):
-        return self.prefix.split(f"/{self.key_dir}")[0]
+        if self.key_dir in self.prefix:
+            return self.prefix.split(f"/{self.key_dir}")[0]
+        else:
+            return self.prefix.rsplit("/",1)[0]
 
     @property
     def subprefix(self):
         return str(Path(self.prefix).relative_to(self.base_prefix))
 
-    def derive(self, new_key: str, local_path: Optional[str] = None):
+    def derive(self, new_key: str, local_path: Optional[str] = None, prefix: Optional[str] = None):
         """
         Derive an object with a new key
         :param new_key:
         :param local_path:
         :return:
         """
-        prefix = self.prefix.replace(self.key_dir, get_key_dirname(new_key))
+        if prefix is None:
+            if self.key_dir not in self.prefix:
+                raise Exception(f"{self.key_dir} not part of {self.prefix}")
+            prefix = self.prefix.replace(self.key_dir, get_key_dirname(new_key))
+        if local_path is not None:
+            prefix = prefix.replace(self.extension, get_extension(local_path))
+
         return self.__class__(
             bucket=self.bucket,
             prefix=prefix,

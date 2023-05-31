@@ -29,3 +29,11 @@ def test_mimage_local_path():
         path = f"/tmp/midatasets/datasets/test/{image_data['key_dir']}/{image_data['resolution']}/image.nii.gz"
         image = MImage.from_local_path(local_path=path, key=image_data["key"])
         assert image.key_dir == image_data["key_dir"]
+
+
+def test_mimage_derive():
+    path = f"/tmp/midatasets/datasets/test/images/native/image.nii.gz"
+    image = MImage.from_local_path(local_path=path, key="image", bucket="test")
+    new_path = f"/tmp/labelmap.nrrd"
+    new_image = image.derive(new_key="labelmap/test", local_path=new_path)
+    assert new_image.s3_path.endswith(".nrrd")

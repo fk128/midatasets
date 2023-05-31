@@ -45,6 +45,11 @@ def printProgressBar(
         print()
 
 
+def get_extension(path: str):
+    return "".join(
+                [s for s in Path(path).suffixes if s in configs.extensions]
+            )
+
 def read_rtstruct(structure):
     contours = []
     for i in range(len(structure.ROIContourSequence)):
