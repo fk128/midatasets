@@ -2,12 +2,10 @@ import os
 from pathlib import Path
 from typing import Optional
 
-import boto3
 import nibabel as nib
 from loguru import logger
 
-from midatasets import configs
-from midatasets.s3 import check_exists_s3, upload_file
+from midatasets.s3 import S3Boto3
 from midatasets.utils import get_key_dirname, get_extension
 
 
@@ -19,6 +17,7 @@ class S3Object:
         key: Optional[str] = None,
         local_path: Optional[str] = None,
         base_dir: str = "/tmp",
+        s3_client: Optional[S3Boto3] = None,
         **kwargs,
     ):
         self.bucket = bucket
@@ -28,6 +27,7 @@ class S3Object:
         self._name = None
         self._ext = None
         self._local_path = local_path
+        self.s3_client = s3_client or S3Boto3()
 
     def __repr__(self):
         return f"{self.__class__.__name__}(name={self.name}, s3_path={self.s3_path}, local_path={self.local_path})"
@@ -102,30 +102,18 @@ class S3Object:
         return Path(self.prefix).name
 
     def download(self, overwrite: bool = False):
-        s3 = boto3.resource("s3", endpoint_url=configs.aws_endpoint_url)
-        bucket = s3.Bucket(self.bucket)
-        target = Path(self.local_path)
-        if target.exists() and not overwrite:
-            logger.info(f"[already exists] {target}, skipping download.")
-            return
-        if not target.parent.exists():
-            target.parent.mkdir(parents=True, exist_ok=True)
-
-        logger.info(f"[Downloading] {self.s3_path} -> {target}")
-        bucket.download_file(self.prefix, str(target))
+        self.s3_client.download_file(bucket=self.bucket,
+                                     prefix=self.prefix,
+                                     target=self.local_path, overwrite=overwrite)
 
     def upload(self, overwrite: bool = False):
-        if not overwrite and check_exists_s3(self.bucket, self.prefix):
-            logger.info(f"[Upload] {self.s3_path} exists -- skipping")
-            return
-        upload_file(self.local_path, bucket=self.bucket, prefix=self.prefix)
-        logger.info(f"[Uploaded] {self.s3_path}")
+        self.s3_client.upload_file(file_name=self.local_path, bucket=self.bucket,prefix=self.prefix, overwrite=overwrite)
 
     def exists_local(self):
         return os.path.exists(self.local_path)
 
     def exists_remote(self):
-        return check_exists_s3(self.bucket, self.prefix)
+        return self.s3_client.check_exists(self.bucket, self.prefix)
 
     def delete(self):
         try:
