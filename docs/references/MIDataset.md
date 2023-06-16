@@ -1,4 +1,2 @@
-
-::: midatasets.mimage
-
+ 
 ::: midatasets.MIDataset

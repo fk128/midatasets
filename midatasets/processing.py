@@ -12,6 +12,16 @@ import SimpleITK as sitk
 def resample_mimage(
     image: MImage, target_spacing: Union[float, int], overwrite: bool = False
 ):
+    """
+    resample an MImage to a target spacing
+    Args:
+        image:
+        target_spacing:
+        overwrite:
+
+    Returns:
+
+    """
     output_path = image.local_path.replace(
         image.resolution_dir, get_spacing_dirname(target_spacing)
     )
@@ -57,6 +67,17 @@ def resample_mimage_parallel(
     overwrite: bool = False,
     n_jobs: int = -1,
 ):
+    """
+    resample MImages in parallel
+    Args:
+        images:
+        target_spacing:
+        overwrite:
+        n_jobs:
+
+    Returns:
+
+    """
     Parallel(n_jobs=n_jobs)(
         delayed(resample_mimage)(image, target_spacing, overwrite) for image in images
     )

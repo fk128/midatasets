@@ -10,14 +10,20 @@ from midatasets.utils import get_spacing_dirname, get_key_dirname
 
 
 class MIDataset:
-    """
-    Dataset class
-    """
+
     def __init__(self,
                  dataset_id: Union[int, str],
                  client: DatasetClientBase,
-                 base_dir="/tmp",
+                 base_dir:str ="/tmp",
                  default_bucket: str = "local"):
+        """
+        Dataset class
+        Args:
+            dataset_id: dataset id
+            client: client
+            base_dir: base dir
+            default_bucket: default s3 bucket
+        """
         self.client = client
         self.dataset_id = dataset_id
         self._images = None

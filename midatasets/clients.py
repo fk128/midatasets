@@ -22,22 +22,53 @@ class DatasetClientBase:
     """
 
     def get_datasets(self) -> List[Dataset]:
+        """
+        Get list of datasets
+        Returns:
+
+        """
         raise NotImplementedError
 
     def get_dataset(self, id: Union[int, UUID, str]) -> Dataset:
+        """
+        Get dataset by id
+        Args:
+            id: dataset id
+
+        Returns:
+
+        """
         raise NotImplementedError
 
-    def get_images(self, dataset_id: Union[int, UUID, str], skip=0, limit=2000) -> List[Image]:
+    def get_images(self, dataset_id: Union[int, UUID, str], skip:int =0, limit:int=2000) -> List[Image]:
+        """
+        Get images for dataset
+        Args:
+            dataset_id: dataset id
+            skip: skip
+            limit: limit
+
+        Returns:
+
+        """
         raise NotImplementedError
 
     def _generate_uuid(self, string: str):
+        """
+        Generate uuid from string
+        Args:
+            string:  string to generate uuid from
+
+        Returns:
+
+        """
         return (uuid3(LOCAL_NAMESPACE, str(string)))
 
 class APIDatasetClient(DatasetClientBase):
     """
     Use REST API as source of datasets
     """
-    def __init__(self, host=None, access_token=None):
+    def __init__(self, host:Optional[str] =None, access_token: Optional[str]=None):
 
         if access_token is None:
             logger.error("Missing access token")
@@ -66,14 +97,29 @@ class APIDatasetClient(DatasetClientBase):
         return "/datasets"
 
     def get_datasets(self) -> List[Dataset]:
+        """
+        Get list of datasets
+        Returns:
+
+        """
         res = self._send_request(self.datasets_prefix)
         return [Dataset(**d) for d in json.loads(res.decode("utf-8"))]
 
     def get_dataset(self, id: int) -> Dataset:
+        """
+        Get dataset by id
+        Args:
+            id:
+
+        Returns:
+
+        """
         res = self._send_request(f"{self.datasets_prefix}/{id}")
         return Dataset(**json.loads(res.decode("utf-8")))
 
     def get_images(self, dataset_id: int, skip=0, limit=2000) -> List[Image]:
+        """
+        Get images for dataset"""
         res = self._send_request(
             f"{self.datasets_prefix}/{dataset_id}/images?skip={skip}&limit={limit}"
         )
@@ -87,6 +133,12 @@ class APIDatasetClient(DatasetClientBase):
 class LocalDatasetClient(DatasetClientBase):
     """
     Use local directory as source of datasets
+
+    Examples:
+        >>> client = LocalDatasetClient(root_dir="/data")
+        >>> client.get_datasets()
+        >>> client.get_dataset(id=1)
+        >>> client.get_images(dataset_id=1)
     """
 
     def __init__(self, root_dir: str):
@@ -141,6 +193,11 @@ class S3DatasetClient(DatasetClientBase):
         self._datasets = None
         self._images = None
     def get_datasets(self) -> List[Dataset]:
+        """
+        Get list of datasets from s3 bucket
+        Returns:
+
+        """
         backend = DatasetS3Backend(bucket=self.bucket, prefix=self.prefix)
         datasets = []
         for name, prefix in backend.list_dirs().items():
@@ -154,10 +211,28 @@ class S3DatasetClient(DatasetClientBase):
         return self._datasets
 
     def get_dataset(self, id: int) -> Dataset:
+        """
+        Get dataset by id
+        Args:
+            id:
+
+        Returns:
+
+        """
         return self.datasets_cached[id]
 
 
     def get_images(self, dataset_id: Union[int, UUID, str], skip=0, limit=2000) -> List[Image]:
+        """
+        Get images from dataset
+        Args:
+            dataset_id:
+            skip:
+            limit:
+
+        Returns:
+
+        """
         dataset = self.get_dataset(dataset_id)
         backend = DatasetS3Backend(bucket=self.bucket, prefix=dataset.path.split(f"s3://{self.bucket}/")[1])
         files = backend.list_files(grouped=True, spacing=0)
