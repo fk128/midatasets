@@ -10,6 +10,9 @@ from midatasets.utils import get_key_dirname, get_extension
 
 
 class S3Object:
+    """
+    A class to represent an s3 object to make it easier to upload and download
+    """
     def __init__(
         self,
         bucket: str,
@@ -20,6 +23,17 @@ class S3Object:
         s3_client: Optional[S3Boto3] = None,
         **kwargs,
     ):
+        """
+
+        Args:
+            bucket: s3 bucket
+            prefix: s3 prefix
+            key: a key that represents the objects
+            local_path: a specific local path to use. If None it is derived from prefix and base_dir
+            base_dir: a base directory to use locally
+            s3_client: the s3 client
+            **kwargs:
+        """
         self.bucket = bucket
         self.prefix = prefix
         self.base_dir = base_dir
@@ -80,11 +94,21 @@ class S3Object:
         return self._local_path or str(Path(f"{self.base_dir}/{self.prefix}"))
 
     @property
-    def s3_path(self):
+    def s3_path(self) -> str:
+        """
+
+        Returns: full s3 path
+
+        """
         return f"s3://{self.bucket}/{self.prefix}"
 
     @property
-    def extension(self):
+    def extension(self) -> str:
+        """
+
+        Returns: file extension
+
+        """
         if self._ext is None:
             self._ext = get_extension(self.prefix)
 
@@ -92,6 +116,11 @@ class S3Object:
 
     @property
     def name(self):
+        """
+
+        Returns: name of object
+
+        """
         if self._name is None:
             path = Path(self.prefix)
             self._name = path.name.replace(self.extension, "")
@@ -99,23 +128,60 @@ class S3Object:
 
     @property
     def basename(self):
+        """
+
+        Returns: basename from prefix
+
+        """
         return Path(self.prefix).name
 
     def download(self, overwrite: bool = False):
+        """
+        Download an object from s3
+        Args:
+            overwrite: Whether to overwrite if it already exists
+
+        Returns: None
+
+        """
+
         self.s3_client.download_file(bucket=self.bucket,
                                      prefix=self.prefix,
                                      target=self.local_path, overwrite=overwrite)
 
-    def upload(self, overwrite: bool = False):
+    def upload(self, overwrite: bool = False) -> None:
+        """
+        Upload an object to s3
+        Args:
+            overwrite: Whether to overwrite if it already exists
+
+        Returns: None
+
+        """
         self.s3_client.upload_file(file_name=self.local_path, bucket=self.bucket,prefix=self.prefix, overwrite=overwrite)
 
     def exists_local(self):
+        """
+        Check if object exists locally
+        Returns: True if exists
+
+        """
         return os.path.exists(self.local_path)
 
     def exists_remote(self):
+        """
+        Check if object exists on s3
+        Returns: True if exists
+
+        """
         return self.s3_client.check_exists(self.bucket, self.prefix)
 
     def delete(self):
+        """
+        Delete an object locally
+        Returns:
+
+        """
         try:
             os.remove(self.local_path)
             logger.info(f"[Removed] {self.local_path}")
@@ -133,6 +199,16 @@ class MObject(S3Object):
         base_dir: str = "/tmp",
         validate_key: bool = True,
     ):
+        """
+
+        Args:
+            bucket: s3 bucket
+            prefix: s3 prefix
+            key: a key that represents the objects
+            local_path: a specific local path to use. If None it is derived from prefix and base_dir
+            base_dir: a base directory to use locally
+            validate_key: whether to check if the key is part of the prefix
+        """
         super().__init__(
             bucket=bucket,
             prefix=prefix,
@@ -150,6 +226,11 @@ class MObject(S3Object):
 
     @property
     def key_dir(self):
+        """
+
+        Returns: the key directory
+
+        """
         return get_key_dirname(self.key)
 
     @property
@@ -188,6 +269,10 @@ class MObject(S3Object):
 
 
 class MImage(MObject):
+    """
+    MImage
+    added functionality for loading image metadata if available
+    """
     def __init__(
         self,
         bucket: str,
@@ -222,6 +307,11 @@ class MImage(MObject):
 
     @property
     def affine(self):
+        """
+
+        Returns: affine metadata
+
+        """
         if self._affine is None:
             self._load_metadata()
         return self._affine
