@@ -59,8 +59,9 @@ images should go in the corresponding folders, e.g.
 
 ```python
 from midatasets import MIDataset
-from midatasets.clients import LocalClient
-client = LocalClient(root_dir="/data/datasets")
+from midatasets.clients import LocalDatasetClient
+
+client = LocalDatasetClient(root_dir="/data/datasets")
 
 dataset = MIDataset(dataset_id="lung", client=client)
 for images in dataset.iterate_keys(keys=["image", "labelmap/l1"], spacing=0):
@@ -71,8 +72,9 @@ for images in dataset.iterate_keys(keys=["image", "labelmap/l1"], spacing=0):
 
 ```python
 from midatasets import MIDataset
-from midatasets.clients import S3Client
-client = S3Client(bucket="test", prefix="datasets")
+from midatasets.clients import S3DatasetClient
+
+client = S3DatasetClient(bucket="test", prefix="datasets")
 
 dataset = MIDataset(dataset_id="lung", client=client)
 

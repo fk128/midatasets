@@ -3,7 +3,7 @@ from typing import List, Dict
 from typing import Union
 
 from midatasets.mimage import MImage
-from midatasets.clients import ClientBase
+from midatasets.clients import DatasetClientBase
 from midatasets.schemas import Dataset, Image
 from midatasets.processing import resample_mimage_parallel
 from midatasets.utils import get_spacing_dirname, get_key_dirname
@@ -15,7 +15,7 @@ class MIDataset:
     """
     def __init__(self,
                  dataset_id: Union[int, str],
-                 client: ClientBase,
+                 client: DatasetClientBase,
                  base_dir="/tmp",
                  default_bucket: str = "local"):
         self.client = client

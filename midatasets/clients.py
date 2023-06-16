@@ -16,7 +16,10 @@ class LOCAL_NAMESPACE:
     bytes = b'midataset'
 
 
-class ClientBase:
+class DatasetClientBase:
+    """
+    Base class for dataset client
+    """
 
     def get_datasets(self) -> List[Dataset]:
         raise NotImplementedError
@@ -30,7 +33,10 @@ class ClientBase:
     def _generate_uuid(self, string: str):
         return (uuid3(LOCAL_NAMESPACE, str(string)))
 
-class APIClient(ClientBase):
+class APIDatasetClient(DatasetClientBase):
+    """
+    Use REST API as source of datasets
+    """
     def __init__(self, host=None, access_token=None):
 
         if access_token is None:
@@ -78,7 +84,10 @@ class APIClient(ClientBase):
 
 
 
-class LocalClient(ClientBase):
+class LocalDatasetClient(DatasetClientBase):
+    """
+    Use local directory as source of datasets
+    """
 
     def __init__(self, root_dir: str):
         self.root_dir = root_dir
@@ -121,7 +130,10 @@ class LocalClient(ClientBase):
         return images
 
 
-class S3Client(ClientBase):
+class S3DatasetClient(DatasetClientBase):
+    """
+    Use s3 as source of datasets
+    """
 
     def __init__(self, bucket: str, prefix: Optional[str] = None):
         self.bucket = bucket
