@@ -1,5 +1,6 @@
+import os.path
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from typing import Union
 
 from midatasets.mimage import MImage
@@ -10,12 +11,13 @@ from midatasets.utils import get_spacing_dirname, get_key_dirname
 
 
 class MIDataset:
-
-    def __init__(self,
-                 dataset_id: Union[int, str],
-                 client: DatasetClientBase,
-                 base_dir:str ="/tmp",
-                 default_bucket: str = "local"):
+    def __init__(
+        self,
+        dataset_id: Union[int, str],
+        client: DatasetClientBase,
+        base_dir: str = "/tmp",
+        default_bucket: str = "local",
+    ):
         """
         Dataset class
         Args:
@@ -50,8 +52,23 @@ class MIDataset:
             self._images = self.client.get_images(self.dataset_id)
         return self._images
 
-    def download(self, keys=("image",), overwrite=False):
-        for images in self.iterate_keys(keys=keys):
+    def download(
+        self,
+        keys=("image",),
+        overwrite=False,
+        extensions: Tuple[str, ...] = (".nii.gz",),
+    ):
+        """
+        Download artifacts with given keys and extensions
+        Args:
+            keys:
+            overwrite:
+            extensions:
+
+        Returns:
+
+        """
+        for images in self.iterate_keys(keys=keys, extensions=extensions):
             for k, image in images.items():
                 image.download(overwrite=overwrite)
 
@@ -70,15 +87,15 @@ class MIDataset:
             validate_key=False,
             local_path=local_path,
         )
-    
-    def _create_mimage(self,  path:str, key:str, name: str):
+
+    def _create_mimage(self, path: str, key: str):
         if path.startswith("s3://"):
             return MImage.from_s3_path(
                 path,
                 base_dir=self.base_dir,
                 validate_key=False,
                 key=key,
-                local_path=f"{self.dataset_base_dir}/{get_key_dirname(key)}/{get_spacing_dirname(0)}/{name}.nii.gz",
+                local_path=f"{self.dataset_base_dir}/{get_key_dirname(key)}/{get_spacing_dirname(0)}/{os.path.basename(path)}",
             )
         else:
             return MImage.from_local_path(
@@ -86,15 +103,21 @@ class MIDataset:
                 validate_key=False,
                 key=key,
                 local_path=path,
-                bucket=self.bucket
+                bucket=self.bucket,
             )
 
-    def iterate_key(self, key: str, spacing: Union[float, int] = 0):
+    def iterate_key(
+        self,
+        key: str,
+        spacing: Union[float, int] = 0,
+        extensions: Tuple[str, ...] = (".nii.gz",),
+    ):
         """
         iterate over objects with a given key
         Args:
             key: the key to iterate over
             spacing:
+            extensions: artifact extensions to iterate
 
         Returns:
 
@@ -108,17 +131,21 @@ class MIDataset:
         remap_keys = self.info.label_mappings.get("_remap_keys", {})
         for image in self.images:
             for artifact in image.artifacts:
-                if key == remap_keys.get(
-                        artifact.key, artifact.key
-                ) and artifact.path.endswith(".nii.gz"):
-                    obj = self._create_mimage(artifact.path, key=key, name=image.name)
+                if key == remap_keys.get(artifact.key, artifact.key) and any(
+                    [artifact.path.endswith(ext) for ext in extensions]
+                ):
+                    obj = self._create_mimage(artifact.path, key=key)
                     if spacing != 0:
-                        obj = self.get_resampled_mimage(
-                            obj, target_spacing=spacing
-                        )
+                        obj = self.get_resampled_mimage(obj, target_spacing=spacing)
                     yield obj
 
-    def iterate_keys(self, keys=("image",), spacing: Union[float, int] = 0, allow_missing: bool = False) -> Dict[str, MImage]:
+    def iterate_keys(
+        self,
+        keys=("image",),
+        spacing: Union[float, int] = 0,
+        allow_missing: bool = False,
+        extensions: Tuple[str, ...] = (".nii.gz",),
+    ) -> Dict[str, MImage]:
         """
         iterate over multiple keys
         Args:
@@ -141,9 +168,11 @@ class MIDataset:
             artifacts = {}
             for artifact in image.artifacts:
                 key = remap_keys.get(artifact.key, artifact.key)
-                if key in keys and artifact.path.endswith(".nii.gz"):
+                if key in keys and any(
+                    [artifact.path.endswith(ext) for ext in extensions]
+                ):
 
-                    artifacts[key] = self._create_mimage(artifact.path, key=key, name=image.name)
+                    artifacts[key] = self._create_mimage(artifact.path, key=key)
                     if spacing != 0:
                         artifacts[key] = self.get_resampled_mimage(
                             artifacts[key], target_spacing=spacing
@@ -173,7 +202,6 @@ class MIDataset:
 
         resample_mimage_parallel(images, target_spacing=target_spacing)
 
-
     def get_dir(self, key: str, spacing: Union[int, float] = 0) -> Path:
         """
         Get the directory of a given key at a given spacing
@@ -184,4 +212,6 @@ class MIDataset:
         Returns:
 
         """
-        return Path(f"{self.dataset_base_dir}/{get_key_dirname(key)}/{get_spacing_dirname(spacing)}")
+        return Path(
+            f"{self.dataset_base_dir}/{get_key_dirname(key)}/{get_spacing_dirname(spacing)}"
+        )

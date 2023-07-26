@@ -97,7 +97,6 @@ class S3Boto3:
 
         """
         s3 = boto3.resource("s3", endpoint_url=configs.aws_endpoint_url)
-        bucket = s3.Bucket(bucket)
         target = Path(target)
         if target.exists() and not overwrite:
             logger.info(f"[already exists] {target}, skipping download.")
@@ -106,4 +105,4 @@ class S3Boto3:
             target.parent.mkdir(parents=True, exist_ok=True)
 
         logger.info(f"[Downloading] {self.get_s3_path(bucket, prefix)} -> {target}")
-        bucket.download_file(prefix, str(target))
+        s3.Bucket(bucket).download_file(prefix, str(target))

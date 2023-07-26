@@ -235,7 +235,7 @@ class S3DatasetClient(DatasetClientBase):
         """
         dataset = self.get_dataset(dataset_id)
         backend = DatasetS3Backend(bucket=self.bucket, prefix=dataset.path.split(f"s3://{self.bucket}/")[1])
-        files = backend.list_files(grouped=True, spacing=0)
+        files = backend.list_files(grouped=True, spacing=0, ext=(".nii.gz", ".nrrd"))
         images = []
         files = files.get(get_spacing_dirname(0))
         if files is None:

@@ -14,7 +14,6 @@ def test_with_local_client(tmpdir):
         assert len(a) == 2
 
 
-
 @mock_s3
 def test_with_s3_client(tmpdir):
     name = "test"
@@ -28,3 +27,21 @@ def test_with_s3_client(tmpdir):
 
     for a in dataset.iterate_keys(keys=["image", "labelmap/l1"], spacing=0):
         a["image"].upload(overwrite=True)
+
+
+@mock_s3
+def test_with_s3_client_nrrd(tmpdir):
+    name = "test"
+    create_dummy_s3_dataset(name=name, labels=["l1"], bucket_name="testbucket", labelmap_ext=".nrrd")
+    client = S3DatasetClient(bucket="testbucket", prefix="datasets")
+    dataset = MIDataset(dataset_id=name, client=client, base_dir=tmpdir)
+    assert len(client.get_datasets()) == 1
+    keys = ["image", "labelmap/l1"]
+    exts = (".nii.gz", ".nrrd")
+    for a in dataset.iterate_keys(keys=keys, extensions=exts):
+        assert len(a) == 2
+    dataset.download(keys=keys, extensions=exts)
+
+    for a in dataset.iterate_keys(keys=keys, extensions=exts):
+        for key in keys:
+            a[key].upload(overwrite=True)

@@ -23,7 +23,7 @@ from midatasets import configs
 
 
 def printProgressBar(
-        iteration, total, prefix="", suffix="", decimals=1, length=100, fill="█"
+    iteration, total, prefix="", suffix="", decimals=1, length=100, fill="█"
 ):
     """
     Call in a loop to create terminal progress bar
@@ -46,9 +46,8 @@ def printProgressBar(
 
 
 def get_extension(path: str):
-    return "".join(
-                [s for s in Path(path).suffixes if s in configs.extensions]
-            )
+    return "".join([s for s in Path(path).suffixes if s in configs.extensions])
+
 
 def read_rtstruct(structure):
     contours = []
@@ -124,12 +123,12 @@ def read_tag_file(filename, img_size=(512, 512)):
     v = np.fromfile(filename, dtype=np.uint8)
     imh = img_size[0]
     imw = img_size[1]
-    img = v[-imh * imw:].reshape(imh, imw)
+    img = v[-imh * imw :].reshape(imh, imw)
     return img
 
 
 def export_train_test_split(
-        reader, out_dir=".", type="csv", ratio=0.66, seed=42, cv=False, n_splits=3
+    reader, out_dir=".", type="csv", ratio=0.66, seed=42, cv=False, n_splits=3
 ):
     name = reader.name
 
@@ -170,61 +169,61 @@ def export_train_test_split(
                 test_x = np.array(reader.image_list)[test_idx]
                 test_y = np.array(reader.labelmap_list)[test_idx]
                 with open(
-                        os.path.join(
-                            out_dir,
-                            name
-                            + "_train_imagelist_f"
-                            + str(i + 1)
-                            + "of"
-                            + str(n_splits)
-                            + ".txt",
-                        ),
-                        "w+",
+                    os.path.join(
+                        out_dir,
+                        name
+                        + "_train_imagelist_f"
+                        + str(i + 1)
+                        + "of"
+                        + str(n_splits)
+                        + ".txt",
+                    ),
+                    "w+",
                 ) as file:
                     for img_path in train_x:
                         file.write(img_path + "\n")
 
                 with open(
-                        os.path.join(
-                            out_dir,
-                            name
-                            + "_train_labellist_f"
-                            + str(i + 1)
-                            + "of"
-                            + str(n_splits)
-                            + ".txt",
-                        ),
-                        "w+",
+                    os.path.join(
+                        out_dir,
+                        name
+                        + "_train_labellist_f"
+                        + str(i + 1)
+                        + "of"
+                        + str(n_splits)
+                        + ".txt",
+                    ),
+                    "w+",
                 ) as file:
                     for img_path in train_y:
                         file.write(img_path + "\n")
 
                 with open(
-                        os.path.join(
-                            out_dir,
-                            name
-                            + "_test_imagelist_f"
-                            + str(i + 1)
-                            + "of"
-                            + str(n_splits)
-                            + ".txt",
-                        ),
-                        "w+",
+                    os.path.join(
+                        out_dir,
+                        name
+                        + "_test_imagelist_f"
+                        + str(i + 1)
+                        + "of"
+                        + str(n_splits)
+                        + ".txt",
+                    ),
+                    "w+",
                 ) as file:
                     for img_path in test_x:
                         file.write(img_path + "\n")
 
                 with open(
-                        os.path.join(
-                            out_dir,
-                            name
-                            + "_test_labellist_f"
-                            + str(i + 1)
-                            + "of"
-                            + str(n_splits)
-                            + ".txt",
-                        ),
-                        "w+",
+                    os.path.join(
+                        out_dir,
+                        name
+                        + "_test_labellist_f"
+                        + str(i + 1)
+                        + "of"
+                        + str(n_splits)
+                        + ".txt",
+                    ),
+                    "w+",
                 ) as file:
                     for img_path in test_y:
                         file.write(img_path + "\n")
@@ -241,25 +240,25 @@ def export_train_test_split(
                 ratio, is_paths=True, seed=seed
             )
             with open(
-                    os.path.join(out_dir, name + "_train_imagelist.txt"), "w+"
+                os.path.join(out_dir, name + "_train_imagelist.txt"), "w+"
             ) as file:
                 for img_path in train_x:
                     file.write(img_path + "\n")
 
             with open(
-                    os.path.join(out_dir, name + "_train_labellist.txt"), "w+"
+                os.path.join(out_dir, name + "_train_labellist.txt"), "w+"
             ) as file:
                 for img_path in train_y:
                     file.write(img_path + "\n")
 
             with open(
-                    os.path.join(out_dir, name + "_test_imagelist.txt"), "w+"
+                os.path.join(out_dir, name + "_test_imagelist.txt"), "w+"
             ) as file:
                 for img_path in test_x:
                     file.write(img_path + "\n")
 
             with open(
-                    os.path.join(out_dir, name + "_test_labellist.txt"), "w+"
+                os.path.join(out_dir, name + "_test_labellist.txt"), "w+"
             ) as file:
                 for img_path in test_y:
                     file.write(img_path + "\n")
@@ -294,6 +293,7 @@ def get_spacing_dirname(spacing):
 
     return spacing_dirname
 
+
 def get_key_dirname(key: str) -> str:
     """
     pluralise base type of key
@@ -304,6 +304,7 @@ def get_key_dirname(key: str) -> str:
     if not parts[0].endswith("s"):
         parts[0] = parts[0] + "s"
     return "/".join(parts)
+
 
 def strip_extension(path):
     path = Path(path)
@@ -367,7 +368,7 @@ def find_longest_matching_name(name, filenames):
     longest_name = ""
     for existing_name in filenames:
         if existing_name in name and len(existing_name) > len(
-                longest_name
+            longest_name
         ):  # check if subset of existing name
             longest_name = existing_name
     if len(longest_name) > 0:
@@ -413,7 +414,7 @@ def grouped_by_key(files_iter: Dict[str, List], root_prefix: str) -> Dict:
 
 
 def grouped_files(
-        files_iter: Dict[str, List], root_prefix: str, by: str = "name"
+    files_iter: Dict[str, List], root_prefix: str, by: str = "name"
 ) -> Dict:
     if by == "name":
         return grouped_by_name(files_iter, root_prefix)
@@ -427,34 +428,34 @@ def create_dummy_dataset(name: str, labels: List[str], root_path: str, num: int 
     p = Path(root_path)
 
     for l in labels:
-        (p / name / "labelmaps" / l / "native").mkdir(
-            exist_ok=True, parents=True
-        )
+        (p / name / "labelmaps" / l / "native").mkdir(exist_ok=True, parents=True)
     (p / name / "images" / "native").mkdir(exist_ok=True, parents=True)
     for i in range(num):
         for l in labels:
-            (
-                    p
-                    / name
-                    / "labelmaps"
-                    / l
-                    / "native"
-                    / f"image_{i}_seg.nii.gz"
-            ).touch()
+            (p / name / "labelmaps" / l / "native" / f"image_{i}_seg.nii.gz").touch()
         (p / name / "images" / "native" / f"image_{i}.nii.gz").touch()
     return Path(root_path) / name
 
 
-def create_dummy_s3_dataset(name: str, labels: List[str], bucket_name: str, prefix: str = "datasets",
-                            region_name: str = "us-east-1", num: int = 10):
+def create_dummy_s3_dataset(
+    name: str,
+    labels: List[str],
+    bucket_name: str,
+    prefix: str = "datasets",
+    region_name: str = "us-east-1",
+    num: int = 10,
+    image_ext: str = ".nii.gz",
+    labelmap_ext: str = ".nii.gz",
+):
     import boto3
+
     conn = boto3.resource("s3", region_name=region_name)
     conn.create_bucket(Bucket=bucket_name)
     s3 = boto3.client("s3", region_name=region_name)
 
     for i in range(num):
         for l in labels:
-            key = f"{prefix}/{name}/labelmaps/{l}/native/img_{i}.nii.gz"
+            key = f"{prefix}/{name}/labelmaps/{l}/native/img_{i}{labelmap_ext}"
             s3.put_object(Bucket=bucket_name, Key=key, Body="")
-        key = f"{prefix}/{name}/images/native/img_{i}.nii.gz"
+        key = f"{prefix}/{name}/images/native/img_{i}{image_ext}"
         s3.put_object(Bucket=bucket_name, Key=key, Body="")
