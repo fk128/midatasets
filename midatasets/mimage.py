@@ -2,7 +2,6 @@ import os
 from pathlib import Path
 from typing import Optional
 
-import nibabel as nib
 from loguru import logger
 
 from midatasets.s3 import S3Boto3
@@ -294,9 +293,14 @@ class MImage(MObject):
         self._affine = None
 
     def _load_metadata(self):
-        native_img = nib.load(self.local_path)
-        self._shape = native_img.shape
-        self._affine = native_img.affine
+        try:
+            import nibabel as nib
+            native_img = nib.load(self.local_path)
+            self._shape = native_img.shape
+            self._affine = native_img.affine
+        except Exception as e:
+            logger.exception("Failed to load metadata")
+
         del native_img
 
     @property

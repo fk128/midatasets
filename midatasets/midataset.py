@@ -6,7 +6,7 @@ from typing import Union
 from midatasets.mimage import MImage
 from midatasets.clients import DatasetClientBase
 from midatasets.schemas import Dataset, Image
-from midatasets.processing import resample_mimage_parallel
+
 from midatasets.utils import get_spacing_dirname, get_key_dirname
 
 
@@ -199,7 +199,7 @@ class MIDataset:
         images = []
         for image in self.iterate_keys(keys=keys, spacing=0):
             images.extend(image.values())
-
+        from midatasets.processing import resample_mimage_parallel
         resample_mimage_parallel(images, target_spacing=target_spacing)
 
     def get_dir(self, key: str, spacing: Union[int, float] = 0) -> Path:
