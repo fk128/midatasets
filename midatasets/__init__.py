@@ -31,6 +31,9 @@ class Configs(BaseSettings):
         ".yml",
         ".csv",
         ".nrrd",
+        ".vtk",
+        ".gif",
+        ".dcm"
     }
     data_types: List[Dict] = [
         {"dirname": "images", "name": "image"},
