@@ -1,3 +1,4 @@
+git+https://github.com/fk128/s3obj@v0.1.0#egg=s3obj
 boto3
 loguru
 pydantic

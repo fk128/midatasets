@@ -63,4 +63,5 @@ class Configs(BaseSettings):
 configs = Configs()
 
 from .midataset import MIDataset
-from .mimage import S3Object, MImage, MObject
+from .mimage import MImage, MObject
+from s3obj import S3Object

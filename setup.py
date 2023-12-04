@@ -8,12 +8,21 @@ from setuptools import find_packages, setup
 with open("README.md") as readme_file:
     readme = readme_file.read()
 
-with open("requirements.txt") as requirements_file:
-    requirements = requirements_file.read().splitlines()
-with open("requirements_itk.txt") as requirements_file:
-    requirements_itk = requirements_file.read().splitlines()
-with open("requirements_dev.txt") as requirements_file:
-    requirements_dev = requirements_file.read().splitlines()
+
+def parse_requirements(path):
+    with open(path) as requirements_file:
+        requirements_base = requirements_file.read().splitlines()
+
+    requirements = [
+        f"{r.split('#egg=')[-1]}@{r}" for r in requirements_base if r.startswith("git+")
+    ]
+    requirements += [r for r in requirements_base if not r.startswith("git+")]
+    return requirements
+
+
+requirements = parse_requirements("requirements.txt")
+requirements_itk = parse_requirements("requirements_itk.txt")
+requirements_dev = parse_requirements("requirements_dev.txt")
 
 
 setup(
