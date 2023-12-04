@@ -27,7 +27,7 @@ requirements_dev = parse_requirements("requirements_dev.txt")
 
 setup(
     name="midatasets",
-    version="0.25.2",
+    version="0.25.3",
     description="Medical Image Dataset tools",
     author="F. K.",
     keywords="medical ",
