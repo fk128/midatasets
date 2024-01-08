@@ -163,6 +163,8 @@ class MIDataset:
             >>>         obj.download()
 
         """
+        if len(extensions) > 1:
+            raise Exception("More than one extension is not currently supported")
         remap_keys = self.info.label_mappings.get("_remap_keys", {})
         for image in self.images:
             artifacts = {}
