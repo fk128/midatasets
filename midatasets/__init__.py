@@ -3,7 +3,7 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator
 
-__version__ = "0.25.4"
+__version__ = "0.25.5"
 
 import os
 from typing import Optional, Dict, List, Set
