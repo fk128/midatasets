@@ -3,10 +3,9 @@ from pathlib import Path
 from typing import List, Dict, Tuple
 from typing import Union
 
-from midatasets.mimage import MImage
 from midatasets.clients import DatasetClientBase
+from midatasets.mimage import MImage
 from midatasets.schemas import Dataset, Image
-
 from midatasets.utils import get_spacing_dirname, get_key_dirname
 
 
@@ -163,16 +162,20 @@ class MIDataset:
             >>>         obj.download()
 
         """
-        if len(extensions) > 1:
-            raise Exception("More than one extension is not currently supported")
+        if not isinstance(extensions, tuple) or not isinstance(extensions, list):
+            extensions = [extensions]
+
+        if len(keys) > 1 and len(extensions) > 1 and len(extensions) != len(keys):
+            raise Exception("The number of extensions needs to match the number of keys")
+        elif len(extensions) == 1:
+            extensions = [extensions[0]]*len(keys)
+
         remap_keys = self.info.label_mappings.get("_remap_keys", {})
         for image in self.images:
             artifacts = {}
             for artifact in image.artifacts:
                 key = remap_keys.get(artifact.key, artifact.key)
-                if key in keys and any(
-                    [artifact.path.endswith(ext) for ext in extensions]
-                ):
+                if key in keys and artifact.path.endswith(extensions[keys.index(key)]):
 
                     artifacts[key] = self._create_mimage(artifact.path, key=key)
                     if spacing != 0:

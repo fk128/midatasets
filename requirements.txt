@@ -1,7 +1,8 @@
 git+https://github.com/fk128/s3obj@v0.1.0#egg=s3obj
 boto3
 loguru
-pydantic
+pydantic==2.*
+pydantic-settings==2.*
 pyyaml
 smart_open
 pandas>=1.2.2

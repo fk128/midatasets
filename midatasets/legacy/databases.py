@@ -10,7 +10,8 @@ from botocore.exceptions import ClientError
 
 # from bson import ObjectId
 from loguru import logger
-from pydantic import BaseModel, BaseSettings, Field
+from pydantic import ConfigDict, BaseModel, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 try:
     from pymongo import MongoClient
@@ -38,17 +39,13 @@ from smart_open import smart_open
 class MIDatasetModel(BaseModel):
     # id: Optional[PyObjectId] = Field(alias="_id")
     name: str
-    label_mappings: Optional[Dict]
+    label_mappings: Optional[Dict] = None
     aws_s3_bucket: str
     aws_s3_prefix: str
     description: str = ""
     created_time: datetime = Field(default_factory=datetime.now)
     modified_time: datetime = Field(default_factory=datetime.now)
-
-    class Config:
-        extra = "allow"
-        arbitrary_types_allowed = True
-        # json_encoders = {ObjectId: str}
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
 
 class DBBase:
@@ -308,22 +305,22 @@ class DBDynamodb(DBBase):
 
 
 class MIDatasetDBDynamodb(DBDynamodb):
+    # TODO[pydantic]: The `Config` class inherits from another class, please create the `model_config` manually.
+    # Check https://docs.pydantic.dev/dev-v2/migration/#changes-to-config for more information.
     class Config(BaseSettings):
         table_name: str = "datasets"
         primary_key: str = "name"
-
-        class Config:
-            env_prefix = "midatasets_dynamodb_"
+        model_config = SettingsConfigDict(env_prefix="midatasets_dynamodb_")
 
 
 class MIDatasetDBYaml(DBYaml):
+    # TODO[pydantic]: The `Config` class inherits from another class, please create the `model_config` manually.
+    # Check https://docs.pydantic.dev/dev-v2/migration/#changes-to-config for more information.
     class Config(BaseSettings):
         path: str = "~/.midatasets.yaml"
         table_name: str = "datasets"
         primary_key: str = "name"
-
-        class Config:
-            env_prefix = "midatasets_yaml_"
+        model_config = SettingsConfigDict(env_prefix="midatasets_yaml_")
 
 
 if MongoClient:
@@ -334,9 +331,7 @@ if MongoClient:
             db_name: str = "midatasets"
             collection_name: str = "datasets"
             primary_key: str = "name"
-
-            class Config:
-                env_prefix = "midatasets_mongo_"
+            model_config = SettingsConfigDict(env_prefix="midatasets_mongo_")
 
 
 else:

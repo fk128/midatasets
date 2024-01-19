@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
+
 __version__ = "0.25.4"
 
 import os
 from typing import Optional, Dict, List, Set
-
-from pydantic import BaseSettings, validator
 from midatasets.schemas import BaseType
 
 
@@ -50,12 +51,10 @@ class Configs(BaseSettings):
         BaseType(name="metadata", dirname="metadata"),
     ]
     database: str = "yaml"
+    model_config = SettingsConfigDict(extra="ignore", env_prefix="midatasets_")
 
-    class Config:
-        extra = "ignore"
-        env_prefix = "midatasets_"
-
-    @validator("root_path")
+    @field_validator("root_path")
+    @classmethod
     def expand_vars(cls, v):
         return os.path.expandvars(v)
 
