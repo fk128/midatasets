@@ -1,4 +1,7 @@
+from moto import mock_s3
+
 from midatasets.mimage import MImage
+from midatasets.utils import create_dummy_s3_dataset
 
 
 def test_mimage_s3_path():
@@ -37,3 +40,8 @@ def test_mimage_derive():
     new_path = f"/tmp/labelmap.nrrd"
     new_image = image.derive(new_key="labelmap/test", local_path=new_path)
     assert new_image.s3_path.endswith(".nrrd")
+
+@mock_s3
+def test_header():
+    paths = create_dummy_s3_dataset(name="dataset", labels=["l1"], bucket_name="test", prefix="datasets")
+    assert MImage(bucket=paths[0]["bucket"], prefix=paths[0]["prefix"], key="labelmap/l1").header is not None

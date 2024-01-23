@@ -452,10 +452,13 @@ def create_dummy_s3_dataset(
     conn = boto3.resource("s3", region_name=region_name)
     conn.create_bucket(Bucket=bucket_name)
     s3 = boto3.client("s3", region_name=region_name)
-
+    paths = []
     for i in range(num):
         for l in labels:
             key = f"{prefix}/{name}/labelmaps/{l}/native/img_{i}{labelmap_ext}"
+            paths.append({"bucket": bucket_name, "prefix": key})
             s3.put_object(Bucket=bucket_name, Key=key, Body="")
         key = f"{prefix}/{name}/images/native/img_{i}{image_ext}"
         s3.put_object(Bucket=bucket_name, Key=key, Body="")
+        paths.append({"bucket": bucket_name, "prefix": key})
+    return paths
