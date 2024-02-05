@@ -1,6 +1,6 @@
 import os.path
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from typing import Union
 
 from midatasets.clients import DatasetClientBase
@@ -53,9 +53,9 @@ class MIDataset:
 
     def download(
         self,
-        keys=("image",),
-        overwrite=False,
-        extensions: Tuple[str, ...] = (".nii.gz",),
+        keys: Tuple[str,...] = ("image",),
+        overwrite: bool =False,
+        extensions: Optional[Tuple[str, ...]] = None,
     ):
         """
         Download artifacts with given keys and extensions
@@ -67,8 +67,8 @@ class MIDataset:
         Returns:
 
         """
-        for images in self.iterate_keys(keys=keys, extensions=extensions):
-            for k, image in images.items():
+        for key in keys:
+            for image in self.iterate_key(key=key, extensions=extensions):
                 image.download(overwrite=overwrite)
 
     def get_resampled_mimage(self, image: MImage, target_spacing):
@@ -109,7 +109,7 @@ class MIDataset:
         self,
         key: str,
         spacing: Union[float, int] = 0,
-        extensions: Tuple[str, ...] = (".nii.gz",),
+        extensions: Optional[Tuple[str, ...]] = None,
     ):
         """
         iterate over objects with a given key
@@ -130,9 +130,9 @@ class MIDataset:
         remap_keys = self.info.label_mappings.get("_remap_keys", {})
         for image in self.images:
             for artifact in image.artifacts:
-                if key == remap_keys.get(artifact.key, artifact.key) and any(
-                    [artifact.path.endswith(ext) for ext in extensions]
-                ):
+                if key == remap_keys.get(artifact.key, artifact.key):
+                    if extensions is not None and not any([artifact.path.endswith(ext) for ext in extensions]):
+                        continue
                     obj = self._create_mimage(artifact.path, key=key)
                     if spacing != 0:
                         obj = self.get_resampled_mimage(obj, target_spacing=spacing)
