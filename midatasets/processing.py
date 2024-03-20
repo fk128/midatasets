@@ -34,6 +34,7 @@ def resample_mimage(
             prefix=prefix,
             key=image.key,
             base_dir=image.base_dir,
+            local_path=output_path,
             validate_key=False,
         )
     sitk_image = sitk.ReadImage(image.local_path)
@@ -58,6 +59,7 @@ def resample_mimage(
         key=image.key,
         base_dir=image.base_dir,
         validate_key=False,
+        local_path=output_path,
     )
 
 
